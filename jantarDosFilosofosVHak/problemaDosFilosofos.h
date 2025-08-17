@@ -1,11 +1,21 @@
 #ifndef PROBLEMA_DOS_FILOSOFOS_H
 #define PROBLEMA_DOS_FILOSOFOS_H
 
+#include <iostream>
 #include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
+#include <functional>
+#include <memory>
+#include <random>
 
 using namespace std;
+
+string stateGarfoToString(int state);
+
+string stateFilosofoToString(int state);
 
 enum class StateGarfo{
 	LIVRE,
@@ -20,13 +30,18 @@ enum class StateFilosofo{
 
 class Garfo{
 	private:
-		StateGarfo state;
+		StateGarfo state = StateGarfo::LIVRE;
+	
 	public:
+		mutex mtx;
+		
 		Garfo();
 
 		void livre();
 
 		void ocupado();
+
+		string getState();
 };
 
 class Filosofo{
@@ -48,6 +63,8 @@ class Filosofo{
 		bool setGarfoEsquerdo(Garfo* garfo);
 
 		bool setGarfoDireito(Garfo* garfo);
+
+		string getState();
 
 		void run();
 };

@@ -47,7 +47,7 @@ Filosofo::Filosofo(){
 }
 
 void Filosofo::pensando(){
-    this_thread::sleep_for(chrono::milliseconds(rand() % 2000 + 500));
+    this_thread::sleep_for(chrono::milliseconds(rand() % 3000 + 500));
     this->state = StateFilosofo::COMFOME;
 }
 
@@ -59,15 +59,12 @@ void Filosofo::comFome(){
         if(this->garfoEsquerdo->getState() == "L"){
             this->garfoEsquerdo->ocupado();
             this->state = StateFilosofo::COMENDO;
-        } else{
-            this->garfoDireito->livre();
-            // tratar o caso em que o garfo esquerdo está ocupado
-        }
+        } else this->garfoDireito->livre(); // isto nem deveria ocorrer, mas....
     }
 }
 
 void Filosofo::comendo(){
-    this_thread::sleep_for(chrono::seconds(3));
+    this_thread::sleep_for(chrono::seconds(2));
     this->garfoEsquerdo->livre();
     this->garfoDireito->livre();
     this->state = StateFilosofo::PENSANDO;

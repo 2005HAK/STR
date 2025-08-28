@@ -47,7 +47,7 @@ Filosofo::Filosofo(){
 }
 
 void Filosofo::pensando(){
-    this_thread::sleep_for(chrono::milliseconds(rand() % 3000 + 500));
+    this_thread::sleep_for(chrono::milliseconds(rand() % 3000 + 500)); // usado para simular o tempo de pensamento
     this->state = StateFilosofo::COMFOME;
 }
 
@@ -64,7 +64,7 @@ void Filosofo::comFome(){
 }
 
 void Filosofo::comendo(){
-    this_thread::sleep_for(chrono::seconds(2));
+    this_thread::sleep_for(chrono::seconds(2)); // simula o tempo de comer
     this->garfoEsquerdo->livre();
     this->garfoDireito->livre();
     this->state = StateFilosofo::PENSANDO;

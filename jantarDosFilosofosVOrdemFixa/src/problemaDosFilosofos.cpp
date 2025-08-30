@@ -1,13 +1,5 @@
 #include "problemaDosFilosofos.h"
 
-string stateGarfoToString(int state){
-	switch (state) {
-		case 0: return "L";
-		case 1: return "O";
-		default: return "UNKNOWN";
-	}
-}
-
 string stateFilosofoToString(int state){
 	switch (state) {
 		case 0: return "P";
@@ -25,16 +17,11 @@ Garfo::Garfo(){
     cout << "Garfo criado" << endl;
 }
 
-void Garfo::livre(){
-    this->state = StateGarfo::LIVRE;
-}
-
-void Garfo::ocupado(){
-    this->state = StateGarfo::OCUPADO;
-}
-
 string Garfo::getState(){
-    return stateGarfoToString(static_cast<int>(this->state));
+    if(this->mtx.try_lock()){
+        this->mtx.unlock();
+        return "L";
+    } else return "O";
 }
 
 // -----------------------
@@ -51,30 +38,8 @@ void Filosofo::pensando(){
     this->state = StateFilosofo::COMFOME;
 }
 
-void Filosofo::comFome(){
-    if(this->last){
-        if(this->garfoEsquerdo->getState() == "L"){
-            this->garfoEsquerdo->ocupado();
-            if(this->garfoDireito->getState() == "L"){
-                this->garfoDireito->ocupado();
-                this->state = StateFilosofo::COMENDO;
-            } else this->garfoEsquerdo->livre(); // isto nem deveria ocorrer, mas....
-        }
-    } else {
-        if(this->garfoDireito->getState() == "L"){
-            this->garfoDireito->ocupado();
-            if(this->garfoEsquerdo->getState() == "L"){
-                this->garfoEsquerdo->ocupado();
-                this->state = StateFilosofo::COMENDO;
-            } else this->garfoDireito->livre(); // isto nem deveria ocorrer, mas....
-        }
-    }
-}
-
 void Filosofo::comendo(){
     this_thread::sleep_for(chrono::seconds(2));
-    this->garfoEsquerdo->livre();
-    this->garfoDireito->livre();
     this->state = StateFilosofo::PENSANDO;
 }
 
@@ -84,15 +49,26 @@ string Filosofo::getState(){
 
 void Filosofo::run(){
     while(running){
-        switch (this->state) {
+        switch(this->state){
             case StateFilosofo::PENSANDO:
                 pensando();
                 break;
             case StateFilosofo::COMFOME:
-                comFome();
-                break;
-            case StateFilosofo::COMENDO:
-                comendo();
+                if(this->last){
+                    // trava o garfo esquerdo primeiro caso seja o ultimo filosofo
+                    lock_guard<mutex> lock1(this->garfoEsquerdo->mtx);
+                    lock_guard<mutex> lock2(this->garfoDireito->mtx);
+
+                    this->state = StateFilosofo::COMENDO;
+                    comendo();
+                } else{
+                    // trava o garfo direito primeiro se não for o ultimo filosofo
+                    lock_guard<mutex> lock1(this->garfoDireito->mtx);
+                    lock_guard<mutex> lock2(this->garfoEsquerdo->mtx);
+
+                    this->state = StateFilosofo::COMENDO;
+                    comendo();
+                }
                 break;
         }
     }
@@ -119,6 +95,7 @@ bool Filosofo::setGarfoDireito(Garfo* garfo){
 // -----------------------
 
 int main(){
+    // Número de filosofos e garfos
     int n = 5;
     
     // Cria os filosofos e os garfos
@@ -127,8 +104,9 @@ int main(){
 
     // Inicializa os filosofos e os garfos
     for(int i = 0; i < n; i++){
-        if(i == n - 1) filosofos.push_back(Filosofo(true));
-        else filosofos.push_back(Filosofo(false));
+        // OBS: a flag aqui é usada para a logica de qual garfo pegar primeiro, não para dizer pra thread que o garfo esta livre ou ocupado
+        if(i == n - 1) filosofos.push_back(Filosofo(true)); // Se for o ultimo filosofo configura a flag last como true
+        else filosofos.push_back(Filosofo(false)); // Se não, configura como false
         garfos.push_back(make_unique<Garfo>());
     }
 
@@ -155,6 +133,6 @@ int main(){
         }
         cout << statesFilosofos << statesGarfos << endl;
     }
-
+    
     return 0;
 }

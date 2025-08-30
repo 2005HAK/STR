@@ -14,26 +14,11 @@
 using namespace std;
 
 /**
- * @brief Converte o estado do garfo para uma string
- * 
- * @param state Estado do garfo
- */
-string stateGarfoToString(int state);
-
-/**
  * @brief Converte o estado do filosofo para uma string
  * 
  * @param state Estado do filosofo
  */
 string stateFilosofoToString(int state);
-
-/**
- * @brief Enum para os estados dos garfos
- */
-enum class StateGarfo{
-	LIVRE,
-	OCUPADO
-};
 
 /**
  * @brief Enum para os estados dos filosofos
@@ -48,9 +33,6 @@ enum class StateFilosofo{
  * @brief Classe que representa um garfo
  */
 class Garfo{
-	private:
-		StateGarfo state = StateGarfo::LIVRE;
-	
 	public:
 		mutex mtx;
 		
@@ -58,16 +40,6 @@ class Garfo{
 		 * @brief Construtor da classe Garfo
 		 */
 		Garfo();
-
-		/**
-		 * @brief Define o estado do garfo como livre
-		 */
-		void livre();
-
-		/**
-		 * @brief Define o estado do garfo como ocupado
-		 */
-		void ocupado();
 
 		/**
 		 * @brief Retorna o estado do garfo como string
@@ -98,13 +70,6 @@ class Filosofo{
 		 * Este método simula o tempo de pensamento do filosofo e muda seu estado para COMFOME
 		 */
 		void pensando();
-
-		/**
-		 * @brief Define o estado de fome do filosofo
-		 * 
-		 * Este método tenta pegar os garfos e mudar o estado do filosofo para COMENDO
-		 */
-		void comFome();
 		
 		/**
 		 * @brief Define o estado de fome do filosofo

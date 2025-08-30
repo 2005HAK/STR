@@ -1,0 +1,3 @@
+E:/Documentos/Hebert_Alan_Kubis/Repositorios/STR/jantarDosFilosofosVTravamentoSimultaneo/build/CMakeFiles/run.dir
+E:/Documentos/Hebert_Alan_Kubis/Repositorios/STR/jantarDosFilosofosVTravamentoSimultaneo/build/CMakeFiles/edit_cache.dir
+E:/Documentos/Hebert_Alan_Kubis/Repositorios/STR/jantarDosFilosofosVTravamentoSimultaneo/build/CMakeFiles/rebuild_cache.dir

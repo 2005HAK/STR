@@ -14,26 +14,11 @@
 using namespace std;
 
 /**
- * @brief Converte o estado do garfo para uma string
- * 
- * @param state Estado do garfo
- */
-string stateGarfoToString(int state);
-
-/**
  * @brief Converte o estado do filosofo para uma string
  * 
  * @param state Estado do filosofo
  */
 string stateFilosofoToString(int state);
-
-/**
- * @brief Enum para os estados dos garfos
- */
-enum class StateGarfo{
-	LIVRE,
-	OCUPADO
-};
 
 /**
  * @brief Enum para os estados dos filosofos
@@ -48,9 +33,6 @@ enum class StateFilosofo{
  * @brief Classe que representa um garfo
  */
 class Garfo{
-	private:
-		StateGarfo state = StateGarfo::LIVRE;
-	
 	public:
 		mutex mtx;
 		
@@ -60,18 +42,8 @@ class Garfo{
 		Garfo();
 
 		/**
-		 * @brief Define o estado do garfo como livre
-		 */
-		void livre();
-
-		/**
-		 * @brief Define o estado do garfo como ocupado
-		 */
-		void ocupado();
-
-		/**
 		 * @brief Retorna o estado do garfo como string
-		 * @return Estado do garfo
+		 * @return Estado do garfo com base no estado do mutex (LOCKED="O" ou UNLOCKED="L")
 		 */
 		string getState();
 };
@@ -81,11 +53,11 @@ class Garfo{
  */
 class Filosofo{
 	private:
-		bool last;
-		StateFilosofo state = StateFilosofo::PENSANDO;
-		Garfo* garfoEsquerdo;
-		Garfo* garfoDireito;
-		bool running = false;
+		bool last;                                        // Flag para indicar se é o último filosofo (para evitar deadlock)
+		StateFilosofo state = StateFilosofo::PENSANDO;    // Estado do filosofo, sendo PENSANDO o inicial
+		Garfo* garfoEsquerdo;							  // Ponteiro para o garfo esquerdo
+		Garfo* garfoDireito;                              // Ponteiro para o garfo direito
+		bool running = false;                             // Flag para controlar a execução do filosofo
 
 	public:
 		/**
@@ -97,20 +69,14 @@ class Filosofo{
 		 * @brief Define o estado de pensamento do filosofo
 		 * 
 		 * Este método simula o tempo de pensamento do filosofo e muda seu estado para COMFOME
+		 * Pensa por um tempo "aleatório" entre .5 e 3.5 segundos
 		 */
 		void pensando();
 
 		/**
-		 * @brief Define o estado de fome do filosofo
+		 * @brief Define o estado onde o filosofo esta comendo
 		 * 
-		 * Este método tenta pegar os garfos e mudar o estado do filosofo para COMENDO
-		 */
-		void comFome();
-		
-		/**
-		 * @brief Define o estado de fome do filosofo
-		 * 
-		 * Este método simula o tempo de comer do filosofo, libera os garfos e muda seu estado para PENSANDO
+		 * Este método simula o tempo de comer do filosofo e muda seu estado para PENSANDO
 		 */
 		void comendo();
 

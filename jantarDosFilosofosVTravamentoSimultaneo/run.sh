@@ -7,4 +7,4 @@ make -j$(nproc)
 ./run
 
 # Para rodar direto no terminal
-# g++ -std=c++17 -pthread problemaDosFilosofos.cpp -o run
+# g++ -std=c++17 -pthread src/problemaDosFilosofos.cpp -o run

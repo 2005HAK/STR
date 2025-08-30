@@ -1,13 +1,5 @@
 #include "problemaDosFilosofos.h"
 
-string stateGarfoToString(int state){
-	switch (state) {
-		case 0: return "L";
-		case 1: return "O";
-		default: return "UNKNOWN";
-	}
-}
-
 string stateFilosofoToString(int state){
 	switch (state) {
 		case 0: return "P";
@@ -25,16 +17,11 @@ Garfo::Garfo(){
     cout << "Garfo criado" << endl;
 }
 
-void Garfo::livre(){
-    this->state = StateGarfo::LIVRE;
-}
-
-void Garfo::ocupado(){
-    this->state = StateGarfo::OCUPADO;
-}
-
 string Garfo::getState(){
-    return stateGarfoToString(static_cast<int>(this->state));
+    if(this->mtx.try_lock()){
+        this->mtx.unlock();
+        return "L";
+    } else return "O";
 }
 
 // -----------------------
@@ -51,22 +38,8 @@ void Filosofo::pensando(){
     this->state = StateFilosofo::COMFOME;
 }
 
-void Filosofo::comFome(){
-    scoped_lock lock(this->garfoEsquerdo->mtx, this->garfoDireito->mtx);
-
-    if(this->garfoDireito->getState() == "L"){
-        this->garfoDireito->ocupado();
-        if(this->garfoEsquerdo->getState() == "L"){
-            this->garfoEsquerdo->ocupado();
-            this->state = StateFilosofo::COMENDO;
-        } else this->garfoDireito->livre(); // isto nem deveria ocorrer, mas....
-    }
-}
-
 void Filosofo::comendo(){
     this_thread::sleep_for(chrono::seconds(2)); // simula o tempo de comer
-    this->garfoEsquerdo->livre();
-    this->garfoDireito->livre();
     this->state = StateFilosofo::PENSANDO;
 }
 
@@ -81,9 +54,9 @@ void Filosofo::run(){
                 pensando();
                 break;
             case StateFilosofo::COMFOME:
-                comFome();
-                break;
-            case StateFilosofo::COMENDO:
+                scoped_lock lock(this->garfoEsquerdo->mtx, this->garfoDireito->mtx);
+
+                this->state = StateFilosofo::COMENDO;
                 comendo();
                 break;
         }
@@ -111,25 +84,32 @@ bool Filosofo::setGarfoDireito(Garfo* garfo){
 // -----------------------
 
 int main(){
+    // Número de filosofos e garfos
     int n = 5;
     
+    // Cria os filosofos e os garfos
     vector<Filosofo> filosofos;
     vector<unique_ptr<Garfo>> garfos;
 
+    // Inicializa os filosofos e garfos
     for(int i = 0; i < n; i++){
         filosofos.push_back(Filosofo());
         garfos.push_back(make_unique<Garfo>());
     }
 
+    // Configura os garfos para cada filosofo
     for(int i = 0; i < n; i++){
         filosofos[i].setGarfoDireito(garfos[i].get());
         filosofos[i].setGarfoEsquerdo(i == 0 ? garfos[n - 1].get() : garfos[i - 1].get());
     }
 
+    // Cria as threads para cada filosofo
     vector<thread> threadsFilosofos;
 
+    // Inicia as threads dos filosofos
     for(int i = 0; i < n; i++) threadsFilosofos.push_back(thread(&Filosofo::run, &filosofos[i]));
 
+    // Imprime o estado dos filosofos e dos garfos
     while(true){
         string statesFilosofos;
         string statesGarfos;

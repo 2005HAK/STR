@@ -9,7 +9,7 @@
 */
 
 // LED on GPIO2
-int ledPin = 1;
+int ledPin = 2;
 
 void setup()
 {

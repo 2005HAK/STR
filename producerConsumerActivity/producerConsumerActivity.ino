@@ -49,7 +49,7 @@ static SemaphoreHandle_t noEmptyStaces;
 
 // Producer: write a given number of times to shared buffer
 void producer(void *parameters) {
-  int pinButton = (int)parameters;
+  int pinButton = *(int*)parameters;
   int var = 0;
   while(1){
     int buttonState = digitalRead(pinButton);
@@ -76,7 +76,7 @@ void producer(void *parameters) {
 
 // Consumer: continuously read from shared buffer
 void consumer(void *parameters) {
-  int pinLed = (int)parameters;
+  int pinLed = *(int*)parameters;
   int val;
   while (1) {
     xSemaphoreTake(noItemsAvailable, portMAX_DELAY);

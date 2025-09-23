@@ -26,9 +26,6 @@
 
 // Settings
 enum {BUF_SIZE = 15};                  // Size of buffer array
-static const int num_prod_tasks = 5;  // Number of producer tasks
-static const int num_cons_tasks = 2;  // Number of consumer tasks
-static const int num_writes = 3;      // Num times each producer writes to buf
 static const int debounceDelay = 90;
 
 // Globals
@@ -39,14 +36,23 @@ static SemaphoreHandle_t mtx;     // Waits for parameter to be read
 static SemaphoreHandle_t noItemsAvailable;     
 static SemaphoreHandle_t noEmptyStaces;     
 
+#define button1 15
+#define button2 16 
+#define button3 17
+#define button4 18
+#define led1 2
+#define led2 3
+#define led3 4
+#define led4 5
 //*****************************************************************************
 // Tasks
 
 // Producer: write a given number of times to shared buffer
 void producer(void *parameters) {
+  int pinButton = (int)parameters;
   int var = 0;
   while(1){
-    int buttonState = digitalRead(15);
+    int buttonState = digitalRead(pinButton);
     if(buttonState == 1){
       int lastDebounceTime = millis();
       while((millis() - lastDebounceTime) < debounceDelay){}
@@ -70,8 +76,8 @@ void producer(void *parameters) {
 
 // Consumer: continuously read from shared buffer
 void consumer(void *parameters) {
+  int pinLed = (int)parameters;
   int val;
-
   while (1) {
     xSemaphoreTake(noItemsAvailable, portMAX_DELAY);
 
@@ -86,9 +92,9 @@ void consumer(void *parameters) {
 
     xSemaphoreGive(noEmptyStaces);
 
-    digitalWrite(2, HIGH);
+    digitalWrite(pinLed, HIGH);
     delay(1000);
-    digitalWrite(2, LOW);
+    digitalWrite(pinLed, LOW);
   }
 }
 
@@ -99,8 +105,14 @@ void setup() {
 
   char task_name[12];
 
-  pinMode(15, INPUT_PULLDOWN);
-  pinMode(2, OUTPUT);
+  pinMode(button1, INPUT_PULLDOWN);
+  pinMode(button2, INPUT_PULLDOWN);
+  pinMode(button3, INPUT_PULLDOWN);
+  pinMode(button4, INPUT_PULLDOWN);
+  pinMode(led1, OUTPUT);
+  pinMode(led2, OUTPUT);
+  pinMode(led3, OUTPUT);
+  pinMode(led4, OUTPUT);
   
   // Configure Serial
   Serial.begin(115200);
@@ -116,8 +128,14 @@ void setup() {
   noEmptyStaces = xSemaphoreCreateCounting(BUF_SIZE, BUF_SIZE);
   noItemsAvailable = xSemaphoreCreateCounting(BUF_SIZE, 0);
 
-  xTaskCreatePinnedToCore(producer, task_name, 1024, NULL, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(consumer, task_name, 1024, NULL, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, button1, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, button2, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, button3, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, button4, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, led1, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, led2, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, led3, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, led4, 1, NULL, app_cpu);
 }
 
 void loop() {

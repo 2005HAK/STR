@@ -1,3 +1,4 @@
+#include <Arduino.h>
 /**
  * FreeRTOS Counting Semaphore Challenge
  * 
@@ -36,14 +37,14 @@ static SemaphoreHandle_t mtx;     // Waits for parameter to be read
 static SemaphoreHandle_t noItemsAvailable;     
 static SemaphoreHandle_t noEmptyStaces;     
 
-#define button1 15
-#define button2 16 
-#define button3 17
-#define button4 18
-#define led1 2
-#define led2 3
-#define led3 4
-#define led4 5
+const int button1 = 15;
+const int button2 = 16;
+const int button3 = 17;
+const int button4 = 18;
+const int led1 = 2;
+const int led2 = 3;
+const int led3 = 4;
+const int led4 = 5;
 //*****************************************************************************
 // Tasks
 
@@ -67,6 +68,7 @@ void producer(void *parameters) {
       
       Serial.print("Produces: ");
       Serial.println(var);
+      Serial.flush();
       var = var + 1;
 
       xSemaphoreGive(noItemsAvailable);
@@ -87,6 +89,7 @@ void consumer(void *parameters) {
     tail = (tail + 1) % BUF_SIZE;
     Serial.println("Consume: ");
     Serial.println(val);
+    Serial.flush();
 
     xSemaphoreGive(mtx);
 
@@ -128,14 +131,14 @@ void setup() {
   noEmptyStaces = xSemaphoreCreateCounting(BUF_SIZE, BUF_SIZE);
   noItemsAvailable = xSemaphoreCreateCounting(BUF_SIZE, 0);
 
-  xTaskCreatePinnedToCore(producer, task_name, 1024, button1, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(producer, task_name, 1024, button2, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(producer, task_name, 1024, button3, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(producer, task_name, 1024, button4, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(consumer, task_name, 1024, led1, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(consumer, task_name, 1024, led2, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(consumer, task_name, 1024, led3, 1, NULL, app_cpu);
-  xTaskCreatePinnedToCore(consumer, task_name, 1024, led4, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, (void*)&button1, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, (void*)&button2, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, (void*)&button3, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(producer, task_name, 1024, (void*)&button4, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, (void*)&led1, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, (void*)&led2, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, (void*)&led3, 1, NULL, app_cpu);
+  xTaskCreatePinnedToCore(consumer, task_name, 1024, (void*)&led4, 1, NULL, app_cpu);
 }
 
 void loop() {

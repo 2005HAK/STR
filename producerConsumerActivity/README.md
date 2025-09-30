@@ -164,7 +164,7 @@ Consume: 1
 👉 [Acesse no GitHub](https://github.com/2005HAK/STR.git) 
 <p align="center">
   <!-- ESP32 -->
-  <img src="https://www.espressif.com/sites/all/themes/espressif/images/logo-guidelines/chinese-vertical-logo.png" alt="ESP32" width="30"/>
+  <img src="https://avatars.githubusercontent.com/u/64278475?s=280&v=4" alt="ESP32" width="35"/>
   &nbsp;&nbsp;&nbsp;
     <!-- FreeRTOS -->
   <img src="https://miro.medium.com/v2/resize:fit:1400/1*kKOI5rbDyooILE3yL1ipkA.png" alt="FreeRTOS" width="70"/>

@@ -76,40 +76,33 @@
 | LED 4      | GPIO 5     |
 
 
-## 🔌 Circuito (Mermaid Diagram)
+## 🔌 Circuito (Mermaid Flowchart)
 
 ```mermaid
-%%{ init: { "theme": "neutral" } }%%
----
-title: Conexões dos Botões e LEDs
----
-circuitDiagram
-  vcc(3.3V)
-  gnd(GND)
+flowchart TB
+    VCC([3.3V])
+    GND([GND])
 
-  %% Botões (com PULLDOWN interno)
-  vcc --- BTN1:push
-  BTN1 --- GPIO15
-  gnd --- GPIO15
+    %% Botões
+    VCC --> BTN1([Botão 1])
+    BTN1 --> GPIO15[GPIO15]
 
-  vcc --- BTN2:push
-  BTN2 --- GPIO16
-  gnd --- GPIO16
+    VCC --> BTN2([Botão 2])
+    BTN2 --> GPIO16[GPIO16]
 
-  vcc --- BTN3:push
-  BTN3 --- GPIO17
-  gnd --- GPIO17
+    VCC --> BTN3([Botão 3])
+    BTN3 --> GPIO17[GPIO17]
 
-  vcc --- BTN4:push
-  BTN4 --- GPIO18
-  gnd --- GPIO18
+    VCC --> BTN4([Botão 4])
+    BTN4 --> GPIO18[GPIO18]
 
-  %% LEDs com resistores em série
-  GPIO2 --- R1:resistor --- LED1:led --- gnd
-  GPIO3 --- R2:resistor --- LED2:led --- gnd
-  GPIO4 --- R3:resistor --- LED3:led --- gnd
-  GPIO5 --- R4:resistor --- LED4:led --- gnd
+    %% LEDs com resistores
+    GPIO2[GPIO2] --> R1([Resistor]) --> LED1([LED1]) --> GND
+    GPIO3[GPIO3] --> R2([Resistor]) --> LED2([LED2]) --> GND
+    GPIO4[GPIO4] --> R3([Resistor]) --> LED3([LED3]) --> GND
+    GPIO5[GPIO5] --> R4([Resistor]) --> LED4([LED4]) --> GND
 ```
+
 ## 📜 Fluxo Produtor → Consumidor (Mermaid)
 
 ```mermaid

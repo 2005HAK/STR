@@ -79,7 +79,7 @@
 ## 🔌 Circuito (Mermaid Flowchart)
 
 <p align="center">
-  <img src="https://github.com/2005HAK/STR/blob/master/producerConsumerActivity/producerConsumer/EsquematicoProdutorConsumidor.png" alt="Esquemático produtor consumidor" width="720"/>
+  <img src="https://github.com/2005HAK/STR/blob/master/producerConsumerActivity/producerConsumer/EsquematicoProdutorComsumidor.png" alt="Esquemático produtor consumidor" width="720"/>
   &nbsp;&nbsp;&nbsp;
 </p>
 

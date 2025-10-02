@@ -27,7 +27,7 @@
 
 // Settings
 enum {BUF_SIZE = 15};                  // Size of buffer array
-static const int debounceDelay = 90;
+static const int debounceDelay = 100;
 
 // Globals
 static int buf[BUF_SIZE];             // Shared buffer
@@ -39,11 +39,11 @@ static SemaphoreHandle_t noEmptyStaces;
 
 const int button1 = 15;
 const int button2 = 4;
-const int button3 = 5;
+const int button3 = 17; // 17
 const int button4 = 19;
 const int led1 = 2;
-const int led2 = 16;
-const int led3 = 17;
+const int led2 = 16; // 16
+const int led3 = 5;
 const int led4 = 18;
 //*****************************************************************************
 // Tasks

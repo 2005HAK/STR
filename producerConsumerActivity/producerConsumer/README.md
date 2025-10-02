@@ -67,41 +67,21 @@
 | Componente | Pino ESP32 |
 |------------|------------|
 | Botão 1    | GPIO 15    |
-| Botão 2    | GPIO 16    |
-| Botão 3    | GPIO 17    |
-| Botão 4    | GPIO 18    |
+| Botão 2    | GPIO 4     |
+| Botão 3    | GPIO 5     |
+| Botão 4    | GPIO 19    |
 | LED 1      | GPIO 2     |
-| LED 2      | GPIO 3     |
-| LED 3      | GPIO 4     |
-| LED 4      | GPIO 5     |
+| LED 2      | GPIO 16    |
+| LED 3      | GPIO 17    |
+| LED 4      | GPIO 18    |
 
 
 ## 🔌 Circuito (Mermaid Flowchart)
 
-```mermaid
-flowchart TB
-    VCC([3.3V])
-    GND([GND])
-
-    %% Botões
-    VCC --> BTN1([Botão 1])
-    BTN1 --> GPIO15[GPIO15]
-
-    VCC --> BTN2([Botão 2])
-    BTN2 --> GPIO16[GPIO16]
-
-    VCC --> BTN3([Botão 3])
-    BTN3 --> GPIO17[GPIO17]
-
-    VCC --> BTN4([Botão 4])
-    BTN4 --> GPIO18[GPIO18]
-
-    %% LEDs com resistores
-    GPIO2[GPIO2] --> R1([Resistor]) --> LED1([LED1]) --> GND
-    GPIO3[GPIO3] --> R2([Resistor]) --> LED2([LED2]) --> GND
-    GPIO4[GPIO4] --> R3([Resistor]) --> LED3([LED3]) --> GND
-    GPIO5[GPIO5] --> R4([Resistor]) --> LED4([LED4]) --> GND
-```
+<p align="center">
+  <img src="https://github.com/2005HAK/STR/blob/master/producerConsumerActivity/producerConsumer/EsquematicoProdutorConsumidor.png" alt="Esquemático produtor consumidor" width="720"/>
+  &nbsp;&nbsp;&nbsp;
+</p>
 
 ## 📜 Fluxo Produtor → Consumidor (Mermaid)
 

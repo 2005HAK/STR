@@ -38,13 +38,13 @@ static SemaphoreHandle_t noItemsAvailable;
 static SemaphoreHandle_t noEmptyStaces;     
 
 const int button1 = 15;
-const int button2 = 16;
-const int button3 = 17;
-const int button4 = 18;
+const int button2 = 4;
+const int button3 = 5;
+const int button4 = 19;
 const int led1 = 2;
-const int led2 = 3;
-const int led3 = 4;
-const int led4 = 5;
+const int led2 = 16;
+const int led3 = 17;
+const int led4 = 18;
 //*****************************************************************************
 // Tasks
 

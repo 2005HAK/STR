@@ -76,7 +76,7 @@
 | LED 4      | GPIO 18    |
 
 
-## 🔌 Circuito (Mermaid Flowchart)
+## 🔌 Circuito
 
 <p align="center">
   <img src="https://github.com/2005HAK/STR/blob/master/producerConsumerActivity/producerConsumer/EsquematicoProdutorComsumidor.png" alt="Esquemático produtor consumidor" width="720"/>

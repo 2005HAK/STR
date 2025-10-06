@@ -1,8 +1,8 @@
 # Produtor/Consumidor - FreeRTOS ⛓️‍💥 (Versão com 4 Botões e 4 LEDs)
 
- Este projeto demonstra o uso de **semáforos de contagem** e **mutex** do `FreeRTOS` no `Arduino/ESP32` para gerenciar concorrência entre múltiplas tarefas **produtoras** (controladas por botões) e múltiplas tarefas **consumidoras** (que acendem LEDs).
- 
- A lógica central implementa um **buffer circular protegido**, onde os produtores escrevem valores e os consumidores retiram valores, garantindo que o acesso ao recurso compartilhado seja **seguro contra condições de corrida**.
+<div style="text-align: justify;">
+Este projeto demonstra o uso de <strong>semáforos de contagem</strong> e <strong>mutex</strong> do FreeRTOS no Arduino/ESP32 para gerenciar concorrência entre múltiplas tarefas <strong>produtoras</strong> (controladas por botões) e múltiplas tarefas <strong>consumidoras</strong> (que acendem LEDs). A lógica central implementa um <strong>buffer circular protegido</strong>, onde os produtores escrevem valores e os consumidores retiram valores, garantindo que o acesso ao recurso compartilhado seja <strong>seguro contra condições de corrida</strong>.
+</div>
 
 ## 📌 Objetivo
 - Utilizar um **mutex** e **semáforos de contagem** para proteger o **buffer compartilhado**.  
@@ -34,26 +34,26 @@
 - *loop()** → Apenas libera CPU (vTaskDelay).
 
 ## ⚙️ Conceitos Utilizados
-- **Buffer Circular (`buf`)**  
+- **Buffer Circular `buf`**  
   Estrutura que armazena dados de forma contínua, reiniciando no índice zero ao atingir o limite.  
   - `head` → índice de escrita  
   - `tail` → índice de leitura  
 
-- **Mutex (`mtx`)**  
+- **Mutex `mtx`**  
   Garante que apenas uma tarefa por vez acesse o buffer.  
 
 - **Semáforo de Contagem**  
   - `noEmptyStaces`: controla quantos espaços vazios ainda existem no buffer.  
   - `noItemsAvailable`: controla quantos itens já estão disponíveis para leitura.  
 
-- **Produtores (`producer`)**  
+- **Produtores `producer`**  
   Ativados quando um **botão** é pressionado.  
   - Escrevem no buffer.  
   - Liberam `noItemsAvailable`.  
 
-- **Consumidores (`consumer`)**  
-  - Esperam até que haja dados (`noItemsAvailable`).  
-  - Leem do buffer e liberam espaço (`noEmptyStaces`).  
+- **Consumidores `consumer`**  
+  - Esperam até que haja dados `noItemsAvailable`.  
+  - Leem do buffer e liberam espaço `noEmptyStaces`.  
   - Acendem o LED correspondente.  
 
 
@@ -151,6 +151,23 @@ Produces: 1
 Consume: 0
 Consume: 1
 ```
+
+## 🎥 Vídeo Demonstrativo
+<p align="justify">
+  O projeto foi materializado em uma <b>placa ilhada com o ESP32</b>, contendo <b>4 botões de entrada e 4 LEDs de saída</b>.  
+Essa configuração permite reproduzir fisicamente o comportamento do sistema <b>Produtor/Consumidor</b> implementado no código com FreeRTOS.
+Cada botão atua como “produtor” de eventos, enquanto os LEDs simulam tarefas “consumidoras", interagindo via semáforos, filas ou outros mecanismos de sincronização no FreeRTOS.
+</p>
+<p align="center">
+<a href="https://drive.google.com/file/d/1R7lyXY1doDVWrxK9FhfZ3DSoISrWn8TX/view?usp=drive_link">
+  <img src="https://img.icons8.com/fluency/256/youtube-play.png" alt="Vídeo Demonstrativo - FreeRTOS Produtor/Consumidor" width="50">
+</a>
+  </a>
+</p>
+<p align="center">
+<b>Produtor/Consumidor - FreeRTOS ⛓️‍💥(Versão com 4 Botões e 4 LEDs)</b>
+</p>
+
 ## 👩‍💻 Autores
 
   - **Gabriella Arévalo Marques**  

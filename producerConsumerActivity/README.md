@@ -189,5 +189,3 @@ Cada botão atua como “produtor” de eventos, enquanto os LEDs simulam tarefa
   <!-- C Language -->
   <img src="https://upload.wikimedia.org/wikipedia/commons/1/19/C_Logo.png" alt="C" width="30"/>
 </p>
-
-

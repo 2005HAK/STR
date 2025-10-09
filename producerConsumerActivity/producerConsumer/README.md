@@ -167,5 +167,5 @@ Cada botão atua como “produtor” de eventos, enquanto os LEDs simulam tarefa
   <img src="https://miro.medium.com/v2/resize:fit:1400/1*kKOI5rbDyooILE3yL1ipkA.png" alt="FreeRTOS" width="70"/>
   &nbsp;&nbsp;&nbsp;
   <!-- C Language -->
-  <img src="https://upload.wikimedia.org/wikipedia/commons/1/19/C_Logo.png" alt="C" width="30"/>
+  <img src="https://upload.wikimedia.org/wikipedia/commons/1/18/ISO_C%2B%2B_Logo.svg" alt="C" width="30"/>
 </p>

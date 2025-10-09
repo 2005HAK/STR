@@ -1,6 +1,6 @@
 # Produtor/Consumidor - FreeRTOS ⛓️‍💥 (Versão com 4 Botões e 4 LEDs)
 
-<div style="text-align: justify;">
+<div align="justify">
 Este projeto demonstra o uso de <strong>semáforos de contagem</strong> e <strong>mutex</strong> do FreeRTOS no Arduino/ESP32 para gerenciar concorrência entre múltiplas tarefas <strong>produtoras</strong> (controladas por botões) e múltiplas tarefas <strong>consumidoras</strong> (que acendem LEDs). A lógica central implementa um <strong>buffer circular protegido</strong>, onde os produtores escrevem valores e os consumidores retiram valores, garantindo que o acesso ao recurso compartilhado seja <strong>seguro contra condições de corrida</strong>.
 </div>
 
@@ -76,7 +76,7 @@ Este projeto demonstra o uso de <strong>semáforos de contagem</strong> e <stron
 | LED 4      | GPIO 18    |
 
 
-## 🔌 Circuito (Mermaid Flowchart)
+## 🔌 Circuito
 
 <p align="center">
   <img src="https://github.com/2005HAK/STR/blob/master/producerConsumerActivity/producerConsumer/EsquematicoProdutorComsumidor.png" alt="Esquema elétrico"/>

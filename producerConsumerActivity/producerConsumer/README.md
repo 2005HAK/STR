@@ -78,30 +78,10 @@ Este projeto demonstra o uso de <strong>semáforos de contagem</strong> e <stron
 
 ## 🔌 Circuito (Mermaid Flowchart)
 
-```mermaid
-flowchart TB
-    VCC([3.3V])
-    GND([GND])
-
-    %% Botões
-    VCC --> BTN1([Botão 1])
-    BTN1 --> GPIO15[GPIO15]
-
-    VCC --> BTN2([Botão 2])
-    BTN2 --> GPIO16[GPIO16]
-
-    VCC --> BTN3([Botão 3])
-    BTN3 --> GPIO17[GPIO17]
-
-    VCC --> BTN4([Botão 4])
-    BTN4 --> GPIO18[GPIO18]
-
-    %% LEDs com resistores
-    GPIO2[GPIO2] --> R1([Resistor]) --> LED1([LED1]) --> GND
-    GPIO3[GPIO3] --> R2([Resistor]) --> LED2([LED2]) --> GND
-    GPIO4[GPIO4] --> R3([Resistor]) --> LED3([LED3]) --> GND
-    GPIO5[GPIO5] --> R4([Resistor]) --> LED4([LED4]) --> GND
-```
+<p align="center">
+  <img src="https://github.com/2005HAK/STR/blob/master/producerConsumerActivity/producerConsumer/EsquematicoProdutorComsumidor.png" alt="Esquema elétrico"/>
+  &nbsp;&nbsp;&nbsp;
+</p>
 
 ## 📜 Fluxo Produtor → Consumidor (Mermaid)
 

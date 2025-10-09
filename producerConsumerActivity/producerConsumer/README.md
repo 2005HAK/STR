@@ -67,13 +67,13 @@ Este projeto demonstra o uso de <strong>semáforos de contagem</strong> e <stron
 | Componente | Pino ESP32 |
 |------------|------------|
 | Botão 1    | GPIO 15    |
-| Botão 2    | GPIO 16    |
+| Botão 2    | GPIO 4     |
 | Botão 3    | GPIO 17    |
-| Botão 4    | GPIO 18    |
+| Botão 4    | GPIO 19    |
 | LED 1      | GPIO 2     |
-| LED 2      | GPIO 3     |
-| LED 3      | GPIO 4     |
-| LED 4      | GPIO 5     |
+| LED 2      | GPIO 16    |
+| LED 3      | GPIO 5     |
+| LED 4      | GPIO 18    |
 
 
 ## 🔌 Circuito (Mermaid Flowchart)

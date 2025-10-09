@@ -108,7 +108,7 @@ void consumer(void *parameters) {
 
     // Blink LED to show activity
     digitalWrite(pinLed, HIGH);
-    delay(1000);                                              // I should use vTaskDelay, but I don't remember and now I don't have time to check (It's time to submit!)
+    vTaskDelay(pdMS_TO_TICKS(1000));                                              // I should use vTaskDelay, but I don't remember and now I don't have time to check (It's time to submit!)
     digitalWrite(pinLed, LOW);
   }
 }
@@ -158,5 +158,5 @@ void setup() {
 
 void loop() {
   // Do nothing but allow yielding to lower-priority tasks
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }

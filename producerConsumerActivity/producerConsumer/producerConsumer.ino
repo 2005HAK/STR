@@ -96,7 +96,7 @@ void consumer(void *parameters) {
     tail = (tail + 1) % BUF_SIZE;
     // End critical section
     // Print to Serial
-    Serial.println("Consume: ");
+    Serial.println("Consumes: ");
     Serial.println(val);
     Serial.flush();
 

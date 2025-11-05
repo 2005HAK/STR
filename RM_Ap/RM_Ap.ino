@@ -16,7 +16,7 @@
 #define NUM_TAREFAS 3
 
 // ==== Pinos dos LEDs ====
-const int LED_T1 = 2;
+const int LED_T1 = 16;
 const int LED_T2 = 3;
 const int LED_T3 = 4;
 const int LED_DEADLINE = 5; // pisca em caso de deadline missed

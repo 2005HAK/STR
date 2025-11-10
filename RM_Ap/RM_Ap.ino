@@ -169,6 +169,7 @@ void setup() {
   pinMode(LED_T1, OUTPUT);
   pinMode(LED_T2, OUTPUT);
   pinMode(LED_T3, OUTPUT);
+  pinMode(LED_AP, OUTPUT);
   pinMode(LED_DEADLINE, OUTPUT);
   pinMode(BOTAO, INPUT_PULLUP);
 

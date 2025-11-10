@@ -25,7 +25,7 @@ const int LED_DEADLINE = 2; // pisca em caso de deadline missed
 const int BOTAO = 15;       // botão para tarefa aperiódica
 
 // ==== Pino do buzzer e orçamento ====
-const int BUZZER = 22;          // Pino do buzzer
+const int BUZZER = 32;          // Pino do buzzer
 const uint32_t BUDGET_US = 8000; // Tempo de orçamento (8 ms)
 
 // ==== Estrutura de uma tarefa periódica ====
@@ -118,7 +118,7 @@ void tarefaAperiodica(void *pvParameters) {
 
       // Simula execução (6 a 10ms)
       digitalWrite(LED_AP, HIGH);
-      busyWait(9000); // teste: 9ms (maior que o budget)
+      busyWait(7967); // teste: 9ms (maior que o budget)
       digitalWrite(LED_AP, LOW);
 
       uint64_t fim = esp_timer_get_time();

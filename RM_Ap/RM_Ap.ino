@@ -25,8 +25,8 @@ const int LED_DEADLINE = 2; // pisca em caso de deadline missed
 const int BOTAO = 15;       // botão para tarefa aperiódica
 
 // ==== Pino do buzzer e orçamento ====
-const int BUZZER = 32;          // Pino do buzzer
-const uint32_t BUDGET_US = 8000; // Tempo de orçamento (8 ms)
+const int BUZZER = 32;
+const uint32_t D_US = 8000; 
 
 // ==== Estrutura de uma tarefa periódica ====
 typedef struct {
@@ -127,9 +127,9 @@ void tarefaAperiodica(void *pvParameters) {
       Serial.printf("[APERIODICA] Terminou (Duração=%lluus)\n", (unsigned long long)duracao);
 
       // Verifica se o orçamento foi ultrapassado
-      if (duracao > BUDGET_US) {
+      if (duracao > D_US) {
         Serial.printf("[BUDGET] Orçamento excedido (%lluus > %luus)\n",
-                      (unsigned long long)duracao, BUDGET_US);
+                      (unsigned long long)duracao, D_US);
         digitalWrite(BUZZER, HIGH); // liga o buzzer
         vTaskDelay(pdMS_TO_TICKS(200)); // 200 ms de aviso sonoro
         digitalWrite(BUZZER, LOW);  // desliga o buzzer

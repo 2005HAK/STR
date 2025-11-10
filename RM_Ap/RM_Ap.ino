@@ -17,9 +17,10 @@
 
 // ==== Pinos dos LEDs ====
 const int LED_T1 = 16;
-const int LED_T2 = 3;
-const int LED_T3 = 4;
-const int LED_DEADLINE = 5; // pisca em caso de deadline missed
+const int LED_T2 = 5;
+const int LED_T3 = 18;
+const int LED_AP = 21;
+const int LED_DEADLINE = 2; // pisca em caso de deadline missed
 const int BOTAO = 15;          // botão para tarefa aperiódica
 
 // ==== Estrutura de uma tarefa periódica ====
@@ -38,9 +39,9 @@ typedef struct {
 
 // ==== Tarefas periódicas ====
 TarefaPeriodica tarefas[NUM_TAREFAS] = {
-  {"T1", 50, 8000, LED_T1, 0, NULL, 0, 0, 0},
-  {"T2", 100, 15000, LED_T2, 0, NULL, 0, 0, 0},
-  {"T3", 200, 25000, LED_T3, 0, NULL, 0, 0, 0}
+  {"T1", 200, 8000, LED_T1, 0, NULL, 0, 0, 0},
+  {"T2", 400, 15000, LED_T2, 0, NULL, 0, 0, 0},
+  {"T3", 600, 25000, LED_T3, 0, NULL, 0, 0, 0}
 };
 
 // ==== Semáforo para tarefa aperiódica ====
@@ -50,9 +51,7 @@ TaskHandle_t tarefaAperiodicaHandle = NULL;
 // ==== Função utilitária: espera ocupada (simula execução CPU) ====
 void busyWait(uint32_t micros) {
   uint64_t inicio = esp_timer_get_time();
-  while ((esp_timer_get_time() - inicio) < micros) {
-    asm volatile("nop");
-  }
+  while ((esp_timer_get_time() - inicio) < micros) asm volatile("nop");
 }
 
 // ==== Função: atribui prioridades RM automaticamente ====
@@ -98,17 +97,12 @@ void tarefaPeriodica(void *pvParameters) {
     if (exec_us > (t->periodo_ms * 1000)) {
       t->misses++;
       digitalWrite(LED_DEADLINE, HIGH);
-      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n",
-                    t->nome, (unsigned long long)exec_us, t->periodo_ms);
+      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n", t->nome, (unsigned long long)exec_us, t->periodo_ms);
       digitalWrite(LED_DEADLINE, LOW);
     }
 
     // Log Serial
-    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n",
-                  t->nome,
-                  (unsigned long long)exec_us,
-                  t->ativacoes,
-                  t->misses);
+    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n", t->nome, (unsigned long long)exec_us, t->ativacoes, t->misses);
   }
 }
 
@@ -121,9 +115,9 @@ void tarefaAperiodica(void *pvParameters) {
       Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
 
       // Simula trabalho rápido (~6ms)
-      digitalWrite(LED_T1, HIGH);
+      digitalWrite(LED_AP, HIGH);
       busyWait(6000);
-      digitalWrite(LED_T1, LOW);
+      digitalWrite(LED_AP, LOW);
 
       uint64_t fim = esp_timer_get_time();
       Serial.printf("[APERIODICA] Terminou (Duração=%lluus)\n", (unsigned long long)(fim - inicio));
@@ -154,16 +148,15 @@ void analisarUtilizacao() {
   Serial.printf("\n========== ANÁLISE ==========\n");
   for (int i = 0; i < NUM_TAREFAS; i++) {
     double media = tarefas[i].ativacoes ? (double)tarefas[i].total_exec_us / tarefas[i].ativacoes : 0.0;
-    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n",
-                  tarefas[i].nome, tarefas[i].periodo_ms, media, tarefas[i].ativacoes, tarefas[i].misses);
+    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n", tarefas[i].nome, tarefas[i].periodo_ms, media, tarefas[i].ativacoes, tarefas[i].misses);
   }
 
   Serial.printf("U_medido = %.3f (%.1f%%)\n", U, U * 100.0);
   Serial.printf("U_bound = %.3f (%.1f%%)\n", U_bound, U_bound * 100.0);
-  if (U <= U_bound)
-    Serial.println("✅ Sistema escalonável (U <= U_bound)");
-  else
-    Serial.println("⚠️  Sistema NÃO garantido (U > U_bound)");
+
+  if (U <= U_bound) Serial.println("✅ Sistema escalonável (U <= U_bound)");
+  else Serial.println("⚠️  Sistema NÃO garantido (U > U_bound)");
+
   Serial.println("=============================\n");
 }
 
@@ -185,15 +178,7 @@ void setup() {
 
   atribuirPrioridadesRM();
 
-  for (int i = 0; i < NUM_TAREFAS; i++) {
-    xTaskCreate(
-      tarefaPeriodica,
-      tarefas[i].nome,
-      4096,
-      (void *)&tarefas[i],
-      tarefas[i].prioridade,
-      &tarefas[i].handle);
-  }
+  for (int i = 0; i < NUM_TAREFAS; i++) xTaskCreate(tarefaPeriodica, tarefas[i].nome, 4096, (void *)&tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
 
   xTaskCreate(tarefaAperiodica, "APERIODICA", 4096, NULL, 1, &tarefaAperiodicaHandle);
 

@@ -9,6 +9,7 @@
   - 1 tarefa aperiódica acionada por botão
   - Visualização prática via GPIOs (LEDs)
   - Registro e análise de tempos com esp_timer_get_time()
+  - Buzzer avisa quando a tarefa aperiódica excede o orçamento (budget)
 */
 
 #include <Arduino.h>
@@ -21,7 +22,11 @@ const int LED_T2 = 5;
 const int LED_T3 = 18;
 const int LED_AP = 21;
 const int LED_DEADLINE = 2; // pisca em caso de deadline missed
-const int BOTAO = 15;          // botão para tarefa aperiódica
+const int BOTAO = 15;       // botão para tarefa aperiódica
+
+// ==== Pino do buzzer e orçamento ====
+const int BUZZER = 22;          // Pino do buzzer
+const uint32_t BUDGET_US = 8000; // Tempo de orçamento (8 ms)
 
 // ==== Estrutura de uma tarefa periódica ====
 typedef struct {
@@ -31,7 +36,6 @@ typedef struct {
   int pino_led;
   UBaseType_t prioridade;
   TaskHandle_t handle;
-  // Métricas
   uint64_t total_exec_us;
   uint32_t ativacoes;
   uint32_t misses;
@@ -56,7 +60,6 @@ void busyWait(uint32_t micros) {
 
 // ==== Função: atribui prioridades RM automaticamente ====
 void atribuirPrioridadesRM() {
-  // Ordena por período (menor primeiro)
   for (int i = 0; i < NUM_TAREFAS - 1; i++) {
     for (int j = i + 1; j < NUM_TAREFAS; j++) {
       if (tarefas[j].periodo_ms < tarefas[i].periodo_ms) {
@@ -66,8 +69,6 @@ void atribuirPrioridadesRM() {
       }
     }
   }
-
-  // Atribui prioridade inversa (menor período → maior prioridade)
   for (int i = 0; i < NUM_TAREFAS; i++) {
     tarefas[i].prioridade = tskIDLE_PRIORITY + (NUM_TAREFAS - i);
     Serial.printf("Prioridade atribuída: %s -> %u\n", tarefas[i].nome, (unsigned)tarefas[i].prioridade);
@@ -97,16 +98,17 @@ void tarefaPeriodica(void *pvParameters) {
     if (exec_us > (t->periodo_ms * 1000)) {
       t->misses++;
       digitalWrite(LED_DEADLINE, HIGH);
-      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n", t->nome, (unsigned long long)exec_us, t->periodo_ms);
+      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n",
+                    t->nome, (unsigned long long)exec_us, t->periodo_ms);
       digitalWrite(LED_DEADLINE, LOW);
     }
 
-    // Log Serial
-    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n", t->nome, (unsigned long long)exec_us, t->ativacoes, t->misses);
+    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n",
+                  t->nome, (unsigned long long)exec_us, t->ativacoes, t->misses);
   }
 }
 
-// ==== Tarefa aperiódica (botão) ====
+// ==== Tarefa aperiódica com medição e buzzer ====
 void tarefaAperiodica(void *pvParameters) {
   (void)pvParameters;
   while (1) {
@@ -114,13 +116,24 @@ void tarefaAperiodica(void *pvParameters) {
       uint64_t inicio = esp_timer_get_time();
       Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
 
-      // Simula trabalho rápido (~6ms)
+      // Simula execução (6 a 10ms)
       digitalWrite(LED_AP, HIGH);
-      busyWait(6000);
+      busyWait(9000); // teste: 9ms (maior que o budget)
       digitalWrite(LED_AP, LOW);
 
       uint64_t fim = esp_timer_get_time();
-      Serial.printf("[APERIODICA] Terminou (Duração=%lluus)\n", (unsigned long long)(fim - inicio));
+      uint64_t duracao = fim - inicio;
+
+      Serial.printf("[APERIODICA] Terminou (Duração=%lluus)\n", (unsigned long long)duracao);
+
+      // Verifica se o orçamento foi ultrapassado
+      if (duracao > BUDGET_US) {
+        Serial.printf("[BUDGET] Orçamento excedido (%lluus > %luus)\n",
+                      (unsigned long long)duracao, BUDGET_US);
+        digitalWrite(BUZZER, HIGH); // liga o buzzer
+        vTaskDelay(pdMS_TO_TICKS(200)); // 200 ms de aviso sonoro
+        digitalWrite(BUZZER, LOW);  // desliga o buzzer
+      }
     }
   }
 }
@@ -148,15 +161,13 @@ void analisarUtilizacao() {
   Serial.printf("\n========== ANÁLISE ==========\n");
   for (int i = 0; i < NUM_TAREFAS; i++) {
     double media = tarefas[i].ativacoes ? (double)tarefas[i].total_exec_us / tarefas[i].ativacoes : 0.0;
-    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n", tarefas[i].nome, tarefas[i].periodo_ms, media, tarefas[i].ativacoes, tarefas[i].misses);
+    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n",
+                  tarefas[i].nome, tarefas[i].periodo_ms, media, tarefas[i].ativacoes, tarefas[i].misses);
   }
-
   Serial.printf("U_medido = %.3f (%.1f%%)\n", U, U * 100.0);
   Serial.printf("U_bound = %.3f (%.1f%%)\n", U_bound, U_bound * 100.0);
-
   if (U <= U_bound) Serial.println("✅ Sistema escalonável (U <= U_bound)");
   else Serial.println("⚠️  Sistema NÃO garantido (U > U_bound)");
-
   Serial.println("=============================\n");
 }
 
@@ -164,21 +175,23 @@ void analisarUtilizacao() {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n=== Sistema RM + Tarefa Aperiódica ===");
+  Serial.println("\n=== Sistema RM + Tarefa Aperiódica + Buzzer ===");
 
   pinMode(LED_T1, OUTPUT);
   pinMode(LED_T2, OUTPUT);
   pinMode(LED_T3, OUTPUT);
+  pinMode(LED_AP, OUTPUT);
   pinMode(LED_DEADLINE, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
   pinMode(BOTAO, INPUT_PULLUP);
 
   semAperiodica = xSemaphoreCreateBinary();
-
   attachInterrupt(digitalPinToInterrupt(BOTAO), isrBotao, FALLING);
 
   atribuirPrioridadesRM();
 
-  for (int i = 0; i < NUM_TAREFAS; i++) xTaskCreate(tarefaPeriodica, tarefas[i].nome, 4096, (void *)&tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
+  for (int i = 0; i < NUM_TAREFAS; i++)
+    xTaskCreate(tarefaPeriodica, tarefas[i].nome, 4096, (void *)&tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
 
   xTaskCreate(tarefaAperiodica, "APERIODICA", 4096, NULL, 1, &tarefaAperiodicaHandle);
 

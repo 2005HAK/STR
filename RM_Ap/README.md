@@ -6,6 +6,20 @@ Este projeto implementa, em um **`ESP32`**, um **sistema de tempo real** baseado
 
 O sistema simula a execução de três tarefas periódicas e uma tarefa aperiódica, com análise automática de utilização e alarme sonoro caso o tempo de execução da tarefa aperiódica ultrapasse um **orçamento máximo `budget`** definido.
 
+## 🧠 Conceitos Aplicados
+
+| Conceito | Implementação |
+|-----------|----------------|
+| **Rate Monotonic (RM)** | menor período → maior prioridade |
+| **Tarefas periódicas** | `vTaskDelayUntil()` |
+| **Tarefa aperiódica** | ISR + semáforo binário `xSemaphoreGiveFromISR` |
+| **Medição de tempo** | `esp_timer_get_time()` (µs) |
+|**Escalonabilidade** | comparação  `U`<sub>`medido`</sub> ≤ `U`<sub>`bound`</sub>
+| **Jitter e deadline miss** | Verificados com diferença entre execuções |
+| **Orçamento (budget)** | Tempo máximo de execução da tarefa aperiódica |
+| **Buzzer sonoro** | Indica estouro do orçamento |
+| **FreeRTOS** | usado para tarefas e semáforos| 
+
 
 ## ⚙️ Funcionalidades
 
@@ -122,22 +136,6 @@ else
    - Se ela ultrapassar o **tempo limite de 8000 µs**, o **buzzer será acionado**.  
 5. A cada 10 segundos, o sistema exibe uma **análise de utilização e escalonabilidade**.
 
-
-## 🧠 Conceitos Aplicados
-
-| Conceito | Implementação |
-|-----------|----------------|
-| **Rate Monotonic (RM)** | menor período → maior prioridade |
-| **Tarefas periódicas** | `vTaskDelayUntil()` |
-| **Tarefa aperiódica** | ISR + semáforo binário `xSemaphoreGiveFromISR` |
-| **Medição de tempo** | `esp_timer_get_time()` (µs) |
-|**Escalonabilidade** | comparação  `U`<sub>`medido`</sub> ≤ `U`<sub>`bound`</sub>
-| **Jitter e deadline miss** | Verificados com diferença entre execuções |
-| **Orçamento (budget)** | Tempo máximo de execução da tarefa aperiódica |
-| **Buzzer sonoro** | Indica estouro do orçamento |
-| **FreeRTOS** | usado para tarefas e semáforos| 
-
-
 ## 📊 Exemplo de Saída Serial
 
 ```
@@ -215,10 +213,12 @@ AP:           *---Execução on-demand---*        (acionada por botão)
 
 ## 📎 Requisitos
 
-- **Placa:** ESP32 Dev Module  
-- **IDE:** Arduino IDE (versão 2.x)  
+- **Placa:** ESP32 Dev Module    
 - **Bibliotecas:** incluídas no pacote ESP32 (FreeRTOS e esp_timer)
-
+- **IDE:** Arduino IDE / PlatformIO  
+- **Framework:** FreeRTOS  
+- **Linguagem:** C++ (Arduino core)  
+- **Baud Rate Serial:** 115200  
 
 
 ## 🔔 Observações

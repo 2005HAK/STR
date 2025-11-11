@@ -67,7 +67,6 @@ As funções `esp_timer_get_time()` e `xTaskGetTickCount()` foram utilizadas par
 
 
 ### 2️⃣ **Utilização Total do Sistema**
-## 📐 Cálculo da Utilização e Limite de Liu & Layland
 
 A **utilização real** do processador é dada por:
 

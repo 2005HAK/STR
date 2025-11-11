@@ -184,10 +184,11 @@ AP:           *---Execução on-demand---*        (acionada por botão)
 - `███` → Execução de tarefa  
 - `*` → Início da tarefa aperiódica  
 - O escalonador **preempte** tarefas de menor prioridade conforme RM
-```
+
+
 ## 🔄 Fluxo de Execução
 
-
+```
                 ┌────────────────────────────┐
                 │     Sistema Inicializa     │
                 └────────────┬───────────────┘

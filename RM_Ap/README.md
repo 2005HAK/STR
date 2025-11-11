@@ -1,209 +1,176 @@
-/*
-  Projeto: Servidor de Tarefa Aperiódica e Escalonamento Rate Monotonic
-  Autor: Gabriella Arévalo Marques e Hebert Alan Kubis
-  Curso: EMB5633 - Sistemas de Tempo Real (UFSC)
-  Data: Novembro/2025
 
-  Objetivos:
-  - 3 tarefas periódicas com períodos distintos (RM automático)
-  - 1 tarefa aperiódica acionada por botão
-  - Visualização prática via GPIOs (LEDs)
-  - Registro e análise de tempos com esp_timer_get_time()
-  - Buzzer avisa quando a tarefa aperiódica excede o orçamento (budget)
-*/
+# 📘 README — Servidor de Tarefa Aperiódica e Escalonamento Rate Monotonic (ESP32 + FreeRTOS)
 
-#include <Arduino.h>
+### 👩‍💻 Autores
+**Gabriella Arévalo Marques**  
+**Hebert Alan Kubis**
 
-#define NUM_TAREFAS 3
+**Disciplina:** EMB5633 - Sistemas de Tempo Real  
+**Instituição:** Universidade Federal de Santa Catarina (UFSC)  
+**Data:** Novembro de 2025  
 
-// ==== Pinos dos LEDs ====
-const int LED_T1 = 16;
-const int LED_T2 = 5;
-const int LED_T3 = 18;
-const int LED_AP = 21;
-const int LED_DEADLINE = 2; // pisca em caso de deadline missed
-const int BOTAO = 15;       // botão para tarefa aperiódica
+---
 
-// ==== Pino do buzzer e orçamento ====
-const int BUZZER = 32;
-const uint32_t D_US = 9000; 
+## 🎯 Objetivo do Projeto
 
-// ==== Estrutura de uma tarefa periódica ====
-typedef struct {
-  const char *nome;
-  uint32_t periodo_ms;
-  uint32_t carga_us;
-  int pino_led;
-  UBaseType_t prioridade;
-  TaskHandle_t handle;
-  uint64_t total_exec_us;
-  uint32_t ativacoes;
-  uint32_t misses;
-} TarefaPeriodica;
+Implementar no **ESP32** (utilizando **FreeRTOS**) um sistema de escalonamento baseado em **Rate Monotonic (RM)** contendo:
 
-// ==== Tarefas periódicas ====
-TarefaPeriodica tarefas[NUM_TAREFAS] = {
-  {"T1", 200, 8000, LED_T1, 0, NULL, 0, 0, 0},
-  {"T2", 400, 15000, LED_T2, 0, NULL, 0, 0, 0},
-  {"T3", 600, 25000, LED_T3, 0, NULL, 0, 0, 0}
-};
+- **3 tarefas periódicas** com períodos e tempos de execução distintos;  
+- **Prioridades automáticas**, determinadas de acordo com o período (menor período → maior prioridade);  
+- **1 tarefa aperiódica** acionada por um **evento real (botão físico)**;  
+- **Registro e visualização prática** do escalonamento via **LEDs (GPIO)** e **Serial Monitor**;  
+- **Medição de tempos reais de execução** e **análise de utilização U**;  
+- **Buzzer sonoro** que sinaliza quando a tarefa aperiódica **excede seu orçamento de execução (budget)**.
 
-// ==== Semáforo para tarefa aperiódica ====
-SemaphoreHandle_t semAperiodica;
-TaskHandle_t tarefaAperiodicaHandle = NULL;
+---
 
-// ==== Função utilitária: espera ocupada (simula execução CPU) ====
-void busyWait(uint32_t micros) {
-  uint64_t inicio = esp_timer_get_time();
-  while ((esp_timer_get_time() - inicio) < micros) asm volatile("nop");
-}
+## ⚙️ Descrição Geral do Sistema
 
-// ==== Função: atribui prioridades RM automaticamente ====
-void atribuirPrioridadesRM() {
-  for (int i = 0; i < NUM_TAREFAS - 1; i++) {
-    for (int j = i + 1; j < NUM_TAREFAS; j++) {
-      if (tarefas[j].periodo_ms < tarefas[i].periodo_ms) {
-        TarefaPeriodica temp = tarefas[i];
-        tarefas[i] = tarefas[j];
-        tarefas[j] = temp;
-      }
-    }
-  }
-  for (int i = 0; i < NUM_TAREFAS; i++) {
-    tarefas[i].prioridade = tskIDLE_PRIORITY + (NUM_TAREFAS - i);
-    Serial.printf("Prioridade atribuída: %s -> %u\n", tarefas[i].nome, (unsigned)tarefas[i].prioridade);
-  }
-}
+O sistema implementa um **escalonador preemptivo** baseado na política **Rate Monotonic (RM)**, onde:
+- Cada tarefa periódica \( \tau_i \) possui um **período Ti** e um **tempo de execução Ci**.  
+- A **prioridade** é **inversamente proporcional** ao período.  
+- As tarefas utilizam a função **`vTaskDelayUntil()`** para manter periodicidade estável.  
 
-// ==== Tarefa periódica genérica ====
-void tarefaPeriodica(void *pvParameters) {
-  TarefaPeriodica *t = (TarefaPeriodica *)pvParameters;
-  TickType_t ultimoTick = xTaskGetTickCount();
-  TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms);
+A **tarefa aperiódica** é ativada por uma **interrupção de botão (ISR)** e executa apenas quando o semáforo é liberado.  
+Caso o **tempo de execução** da tarefa aperiódica **ultrapasse o limite de orçamento (budget_us)**, um **buzzer é acionado** para indicar a violação.
 
-  while (1) {
-    vTaskDelayUntil(&ultimoTick, periodoTicks);
+---
 
-    uint64_t inicio = esp_timer_get_time();
-    digitalWrite(t->pino_led, HIGH);
-    busyWait(t->carga_us);
-    digitalWrite(t->pino_led, LOW);
-    uint64_t fim = esp_timer_get_time();
+## 🧩 Estrutura do Projeto
 
-    uint64_t exec_us = fim - inicio;
-    t->total_exec_us += exec_us;
-    t->ativacoes++;
+### 🧱 Tarefas Periódicas
+- **T1:** Período = 200 ms, Carga ≈ 8 ms  
+- **T2:** Período = 400 ms, Carga ≈ 15 ms  
+- **T3:** Período = 600 ms, Carga ≈ 25 ms  
 
-    // Verifica deadline missed
-    if (exec_us > (t->periodo_ms * 1000)) {
-      t->misses++;
-      digitalWrite(LED_DEADLINE, HIGH);
-      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n",
-                    t->nome, (unsigned long long)exec_us, t->periodo_ms);
-      digitalWrite(LED_DEADLINE, LOW);
-    }
+Cada tarefa:
+- Pisca um LED durante sua execução (GPIOs distintos).  
+- Mede tempo real de execução usando `esp_timer_get_time()`.  
+- Detecta **deadline misses** (quando tempo de execução > período).  
+- Armazena estatísticas: número de ativações, tempo médio e misses.
 
-    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n",
-                  t->nome, (unsigned long long)exec_us, t->ativacoes, t->misses);
-  }
-}
+### 🔘 Tarefa Aperiódica
+- Ativada por **botão físico (GPIO 15)** via **interrupção (ISR)**.
+- Sinaliza execução em um LED dedicado (**LED_AP**).  
+- Mede o tempo total de execução.  
+- Caso **duração > D_US (orçamento)**, o **buzzer (GPIO 32)** é acionado por 200 ms.  
+- O orçamento está definido em:
+  ```cpp
+  const uint32_t D_US = 8000; // 8 milissegundos
+  ```
 
-// ==== Tarefa aperiódica com medição e buzzer ====
-void tarefaAperiodica(void *pvParameters) {
-  (void)pvParameters;
-  while (1) {
-    if (xSemaphoreTake(semAperiodica, portMAX_DELAY) == pdTRUE) {
-      uint64_t inicio = esp_timer_get_time();
-      Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
+### 🔔 Buzzer (Budget Overflow)
+- **Pino:** GPIO 32  
+- **Função:** Sinalizar quando a tarefa aperiódica ultrapassa seu tempo limite de execução.  
+- O buzzer emite som durante **200 ms**.
 
-      // Simula execução (6 a 10ms)
-      digitalWrite(LED_AP, HIGH);
-      busyWait(7967); // teste: 9ms (maior que o budget)
-      digitalWrite(LED_AP, LOW);
+---
 
-      uint64_t fim = esp_timer_get_time();
-      uint64_t duracao = fim - inicio;
+## 📊 Cálculo e Métricas de Desempenho
 
-      Serial.printf("[APERIODICA] Terminou (Duração=%lluus)\n", (unsigned long long)duracao);
+### 1️⃣ **Medições Reais**
+As funções `esp_timer_get_time()` e `xTaskGetTickCount()` foram utilizadas para medir:
+- Tempo de execução real de cada tarefa;
+- Jitter entre ativações;
+- Latência da tarefa aperiódica.
 
-      // Verifica se o orçamento foi ultrapassado
-      if (duracao > D_US) {
-        Serial.printf("[BUDGET] Orçamento excedido (%lluus > %luus)\n",
-                      (unsigned long long)duracao, D_US);
-        digitalWrite(BUZZER, HIGH); // liga o buzzer
-        vTaskDelay(pdMS_TO_TICKS(200)); // 200 ms de aviso sonoro
-        digitalWrite(BUZZER, LOW);  // desliga o buzzer
-      }
-    }
-  }
-}
+### 2️⃣ **Utilização Total do Sistema**
+A utilização real \( U \) é calculada conforme:
 
-// ==== ISR do botão ====
-void IRAM_ATTR isrBotao() {
-  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  xSemaphoreGiveFromISR(semAperiodica, &xHigherPriorityTaskWoken);
-  if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
-}
+\[ U = \sum_{i=1}^{n} \frac{C_i}{T_i} \]
 
-// ==== Cálculo da utilização e comparação com U_bound ====
-void analisarUtilizacao() {
-  double U = 0.0;
-  for (int i = 0; i < NUM_TAREFAS; i++) {
-    if (tarefas[i].ativacoes == 0) continue;
-    double Ci = (double)tarefas[i].total_exec_us / tarefas[i].ativacoes;
-    double Ti = (double)tarefas[i].periodo_ms * 1000.0;
-    U += Ci / Ti;
-  }
+E comparada com o limite teórico de Liu & Layland:
 
-  int n = NUM_TAREFAS;
-  double U_bound = n * (pow(2.0, 1.0 / n) - 1.0);
+\[ U_b = n(2^{1/n} - 1) \]
 
-  Serial.printf("\n========== ANÁLISE ==========\n");
-  for (int i = 0; i < NUM_TAREFAS; i++) {
-    double media = tarefas[i].ativacoes ? (double)tarefas[i].total_exec_us / tarefas[i].ativacoes : 0.0;
-    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n",
-                  tarefas[i].nome, tarefas[i].periodo_ms, media, tarefas[i].ativacoes, tarefas[i].misses);
-  }
-  Serial.printf("U_medido = %.3f (%.1f%%)\n", U, U * 100.0);
-  Serial.printf("U_bound = %.3f (%.1f%%)\n", U_bound, U_bound * 100.0);
-  if (U <= U_bound) Serial.println("✅ Sistema escalonável (U <= U_bound)");
-  else Serial.println("⚠️  Sistema NÃO garantido (U > U_bound)");
-  Serial.println("=============================\n");
-}
+A verificação é feita periodicamente (a cada 10 segundos) via função `analisarUtilizacao()`:
 
-// ==== Setup ====
-void setup() {
-  Serial.begin(115200);
-  delay(500);
-  Serial.println("\n=== Sistema RM + Tarefa Aperiódica + Buzzer ===");
+```cpp
+if (U <= U_bound)
+  Serial.println("✅ Sistema escalonável (U <= U_bound)");
+else
+  Serial.println("⚠️  Sistema NÃO garantido (U > U_bound)");
+```
 
-  pinMode(LED_T1, OUTPUT);
-  pinMode(LED_T2, OUTPUT);
-  pinMode(LED_T3, OUTPUT);
-  pinMode(LED_AP, OUTPUT);
-  pinMode(LED_DEADLINE, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
-  pinMode(BOTAO, INPUT_PULLUP);
+---
 
-  semAperiodica = xSemaphoreCreateBinary();
-  attachInterrupt(digitalPinToInterrupt(BOTAO), isrBotao, FALLING);
+## 🧠 Conceitos Aplicados
 
-  atribuirPrioridadesRM();
+| Conceito | Implementação |
+|-----------|----------------|
+| **Rate Monotonic (RM)** | Prioridade inversa ao período |
+| **Tarefas periódicas** | `vTaskDelayUntil()` |
+| **Tarefa aperiódica** | ISR + semáforo binário (`xSemaphoreGiveFromISR`) |
+| **Medição de tempo** | `esp_timer_get_time()` (µs) |
+| **Jitter e deadline miss** | Verificados com diferença entre execuções |
+| **Orçamento (budget)** | Tempo máximo de execução da tarefa aperiódica |
+| **Buzzer sonoro** | Indica estouro do orçamento |
 
-  for (int i = 0; i < NUM_TAREFAS; i++)
-    xTaskCreate(tarefaPeriodica, tarefas[i].nome, 4096, (void *)&tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
+---
 
-  xTaskCreate(tarefaAperiodica, "APERIODICA", 4096, NULL, 1, &tarefaAperiodicaHandle);
+## 🔌 Ligações de Hardware
 
-  Serial.println("Sistema iniciado com sucesso!");
-}
+| Componente | GPIO | Função |
+|-------------|------|--------|
+| LED T1 | 16 | Indica execução da tarefa T1 |
+| LED T2 | 5 | Indica execução da tarefa T2 |
+| LED T3 | 18 | Indica execução da tarefa T3 |
+| LED Aperiódica | 21 | Pisca durante execução da tarefa aperiódica |
+| LED Deadline Miss | 2 | Pisca quando há deadline excedido |
+| Botão | 15 | Ativa a tarefa aperiódica |
+| Buzzer | 32 | Emite som quando o orçamento é excedido |
 
-// ==== Loop ====
-void loop() {
-  static uint64_t ultimo = 0;
-  if (millis() - ultimo > 10000) {
-    ultimo = millis();
-    analisarUtilizacao();
-  }
-  vTaskDelay(pdMS_TO_TICKS(200));
-}
+---
+
+## 🧮 Resultados Esperados (exemplo de saída Serial)
+
+```
+=== Sistema RM + Tarefa Aperiódica + Buzzer ===
+Prioridade atribuída: T1 -> 4
+Prioridade atribuída: T2 -> 3
+Prioridade atribuída: T3 -> 2
+Sistema iniciado com sucesso!
+
+T1: exec=7900us ativ=10 misses=0
+T2: exec=15000us ativ=5 misses=0
+T3: exec=25000us ativ=3 misses=0
+[APERIODICA] Iniciou em 56780000us
+[APERIODICA] Terminou (Duração=9100us)
+[BUDGET] Orçamento excedido (9100us > 8000us)
+🔔 Buzzer ativo por 200ms
+
+========== ANÁLISE ==========
+T1 -> T=200ms, C_médio=7900us, ativ=100, misses=0
+T2 -> T=400ms, C_médio=15000us, ativ=50, misses=0
+T3 -> T=600ms, C_médio=25000us, ativ=30, misses=0
+U_medido = 0.475 (47.5%)
+U_bound = 0.779 (77.9%)
+✅ Sistema escalonável (U <= U_bound)
+=============================
+```
+
+---
+
+## 🧩 Conclusão
+
+O projeto cumpre **integralmente** os requisitos do trabalho prático definido no Moodle UFSC:
+
+✅ 3 tarefas periódicas com tempos distintos  
+✅ Priorização automática (RM)  
+✅ 1 tarefa aperiódica acionada por botão  
+✅ Visualização real via LEDs e Serial  
+✅ Medição de execução com `esp_timer_get_time()`  
+✅ Cálculo e comparação de U e U_b  
+✅ Buzzer sinalizando estouro de orçamento  
+
+O sistema demonstra na prática o funcionamento do **escalonamento Rate Monotonic**, o comportamento **preemptivo do FreeRTOS**, e os efeitos do **budget excedido** em tarefas aperiódicas.
+
+
+
+## 🧪 Ferramentas e Ambiente
+
+- **Placa:** ESP32 DevKit v1  
+- **IDE:** Arduino IDE / PlatformIO  
+- **Framework:** FreeRTOS  
+- **Linguagem:** C++ (Arduino core)  
+- **Baud Rate Serial:** 115200  

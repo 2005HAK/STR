@@ -17,9 +17,6 @@ O sistema simula a execução de três tarefas periódicas e uma tarefa aperiód
 |**Escalonabilidade** | comparação  `U`<sub>`medido`</sub> ≤ `U`<sub>`bound`</sub>
 | **Jitter e deadline miss** | Verificados com diferença entre execuções |
 | **Orçamento (budget)** | Tempo máximo de execução da tarefa aperiódica |
-| **Buzzer sonoro** | Indica estouro do orçamento |
-| **FreeRTOS** | usado para tarefas e semáforos| 
-
 
 ## ⚙️ Funcionalidades
 
@@ -233,7 +230,29 @@ AP:           *---Execução on-demand---*        (acionada por botão)
   ```
 - O código pode ser expandido para incluir servidores de tarefas aperiódicas (ex.: *Deferrable Server*, *Sporadic Server*).
 
----
+
+
+## 👩‍💻 Autores
+
+  - **Gabriella Arévalo Marques**  
+    📧 [gabriellaarevalomarques@gmail.com](mailto:gabriellaarevalomarques@gmail.com)
+
+  - **Hebert Allan Kubis**  
+    📧 [herbertkubis15@gmail.com](mailto:herbertkubis15@gmail.com)
+
+## 🔗 Repositório
+
+👉 [Acesse no GitHub](https://github.com/2005HAK/STR.git) 
+<p align="center">
+  <!-- ESP32 -->
+  <img src="https://avatars.githubusercontent.com/u/64278475?s=280&v=4" alt="ESP32" width="35"/>
+  &nbsp;&nbsp;&nbsp;
+    <!-- FreeRTOS -->
+  <img src="https://miro.medium.com/v2/resize:fit:1400/1*kKOI5rbDyooILE3yL1ipkA.png" alt="FreeRTOS" width="70"/>
+  &nbsp;&nbsp;&nbsp;
+  <!-- Arduino -->
+  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Arduino_IDE_logo.svg/2048px-Arduino_IDE_logo.svg.png" alt="C" width="35"/>
+</p>
 
 **Autores:** Gabriella Arévalo Marques e Hebert Alan Kubis  
 **Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  

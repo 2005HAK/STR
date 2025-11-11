@@ -1,40 +1,33 @@
+# 🖥 Servidor de Tarefa Aperiódica e Escalonamento Rate Monotonic (RM)
 
-# 📘 README — Servidor de Tarefa Aperiódica e Escalonamento Rate Monotonic (ESP32 + FreeRTOS)
+## 📘 Descrição do Projeto
 
-### 👩‍💻 Autores
-**Gabriella Arévalo Marques**  
-**Hebert Alan Kubis**
+Este projeto implementa, em um **`ESP32`**, um **sistema de tempo real** baseado no **`escalonamento Rate Monotonic (RM)`**, com suporte a uma **tarefa aperiódica** acionada por botão físico.
 
-**Disciplina:** EMB5633 - Sistemas de Tempo Real  
-**Instituição:** Universidade Federal de Santa Catarina (UFSC)  
-**Data:** Novembro de 2025  
+O sistema simula a execução de três tarefas periódicas e uma tarefa aperiódica, com análise automática de utilização e alarme sonoro caso o tempo de execução da tarefa aperiódica ultrapasse um **orçamento máximo `budget`** definido.
 
----
 
-## 🎯 Objetivo do Projeto
+## ⚙️ Funcionalidades
 
-Implementar no **ESP32** (utilizando **FreeRTOS**) um sistema de escalonamento baseado em **Rate Monotonic (RM)** contendo:
+| Componente | Descrição |
+|-------------|------------|
+| **T1, T2, T3** | Tarefas periódicas com tempos e prioridades distintas. |
+| **Tarefa Aperiódica** | Disparada via botão, executa fora do escalonamento regular. |
+| **LEDs** | Indicam a execução de cada tarefa e *deadline missed*. |
+| **Buzzer** | Toca se a tarefa aperiódica exceder o tempo limite budget. |
+| **Cálculo RM** | Análise periódica da utilização do processador e comparação com o limite teórico de Liu & Layland. |
 
-- **3 tarefas periódicas** com períodos e tempos de execução distintos;  
-- **Prioridades automáticas**, determinadas de acordo com o período (menor período → maior prioridade);  
-- **1 tarefa aperiódica** acionada por um **evento real (botão físico)**;  
-- **Registro e visualização prática** do escalonamento via **LEDs (GPIO)** e **Serial Monitor**;  
-- **Medição de tempos reais de execução** e **análise de utilização U**;  
-- **Buzzer sonoro** que sinaliza quando a tarefa aperiódica **excede seu orçamento de execução (budget)**.
 
----
+## </> Estrutura do Projeto
+Estrutura do Código
 
-## ⚙️ Descrição Geral do Sistema
-
-O sistema implementa um **escalonador preemptivo** baseado na política **Rate Monotonic (RM)**, onde:
-- Cada tarefa periódica \( \tau_i \) possui um **período Ti** e um **tempo de execução Ci**.  
-- A **prioridade** é **inversamente proporcional** ao período.  
-- As tarefas utilizam a função **`vTaskDelayUntil()`** para manter periodicidade estável.  
-
-A **tarefa aperiódica** é ativada por uma **interrupção de botão (ISR)** e executa apenas quando o semáforo é liberado.  
-Caso o **tempo de execução** da tarefa aperiódica **ultrapasse o limite de orçamento (budget_us)**, um **buzzer é acionado** para indicar a violação.
-
----
+- `TarefaPeriodica`: estrutura de dados das tarefas (período, carga, prioridade, etc.)  
+- `busyWait()`: simula carga de CPU (espera ocupada)  
+- `atribuirPrioridadesRM()`: define prioridades conforme o período (menor período = maior prioridade)  
+- `tarefaPeriodica()`: rotina genérica para todas as tarefas periódicas  
+- `tarefaAperiodica()`: executa quando o botão é pressionado  
+- `isrBotao()`: interrupção que libera o semáforo da tarefa aperiódica  
+- `analisarUtilizacao()`: calcula `U_medido` e compara com `U_bound`
 
 ## 🧩 Estrutura do Projeto
 
@@ -64,8 +57,6 @@ Cada tarefa:
 - **Função:** Sinalizar quando a tarefa aperiódica ultrapassa seu tempo limite de execução.  
 - O buzzer emite som durante **200 ms**.
 
----
-
 ## 📊 Cálculo e Métricas de Desempenho
 
 ### 1️⃣ **Medições Reais**
@@ -74,14 +65,29 @@ As funções `esp_timer_get_time()` e `xTaskGetTickCount()` foram utilizadas par
 - Jitter entre ativações;
 - Latência da tarefa aperiódica.
 
+
 ### 2️⃣ **Utilização Total do Sistema**
-A utilização real \( U \) é calculada conforme:
+## 📐 Cálculo da Utilização e Limite de Liu & Layland
 
-\[ U = \sum_{i=1}^{n} \frac{C_i}{T_i} \]
+A **utilização real** do processador é dada por:
 
-E comparada com o limite teórico de Liu & Layland:
+\[
+U = \sum_{i=1}^{n} \frac{C_i}{T_i}
+\]
 
-\[ U_b = n(2^{1/n} - 1) \]
+onde:
+- \( C_i \) = tempo de computação da tarefa *i*  
+- \( T_i \) = período da tarefa *i*  
+- \( n \) = número de tarefas periódicas  
+
+O valor obtido é comparado com o **limite teórico de Liu & Layland**:
+
+\[
+U_b = n \, (2^{1/n} - 1)
+\]
+
+Se \( U \leq U_b \), o sistema é **escalonável** sob a política **Rate Monotonic (RM)**.
+
 
 A verificação é feita periodicamente (a cada 10 segundos) via função `analisarUtilizacao()`:
 
@@ -92,85 +98,145 @@ else
   Serial.println("⚠️  Sistema NÃO garantido (U > U_bound)");
 ```
 
----
+## 🔌 Ligação Esquematica de Pinos
+![Esquema de Ligações](https://github.com/2005HAK/STR/blob/master/RM_Ap/Esquema%20RM_Ap.png?raw=true)
+
+
+
+| Componente | Pino ESP32 | Função |
+|-------------|-------------|--------|
+| LED T1 | 16 | Tarefa periódica 1 |
+| LED T2 | 5 | Tarefa periódica 2 |
+| LED T3 | 18 | Tarefa periódica 3 |
+| LED Aperiódica | 21 | Execução da tarefa aperiódica |
+| LED Deadline | 2 | Sinaliza *deadline missed* |
+| Botão | 15 | Aciona a tarefa aperiódica |
+| Buzzer | 32 | Sinal de aviso de budget excedido |
+
+
+## 🕹️ Como Usar
+
+1. Carregue o código no **ESP32 Dev Module**.  
+2. Abra o **Monitor Serial** (115200 baud).  
+3. Observe os LEDs piscando de acordo com o período de cada tarefa.  
+4. Pressione o **botão (pino 15)** para acionar a tarefa aperiódica.  
+   - Se ela ultrapassar o **tempo limite de 8000 µs**, o **buzzer será acionado**.  
+5. A cada 10 segundos, o sistema exibe uma **análise de utilização e escalonabilidade**.
+
 
 ## 🧠 Conceitos Aplicados
 
 | Conceito | Implementação |
 |-----------|----------------|
-| **Rate Monotonic (RM)** | Prioridade inversa ao período |
+| **Rate Monotonic (RM)** | menor período → maior prioridade |
 | **Tarefas periódicas** | `vTaskDelayUntil()` |
-| **Tarefa aperiódica** | ISR + semáforo binário (`xSemaphoreGiveFromISR`) |
+| **Tarefa aperiódica** | ISR + semáforo binário `xSemaphoreGiveFromISR` |
 | **Medição de tempo** | `esp_timer_get_time()` (µs) |
+|**Escalonabilidade** | comparação  `U`<sub>`medido`</sub> ≤ `U`<sub>`bound`</sub>
 | **Jitter e deadline miss** | Verificados com diferença entre execuções |
 | **Orçamento (budget)** | Tempo máximo de execução da tarefa aperiódica |
 | **Buzzer sonoro** | Indica estouro do orçamento |
+| **FreeRTOS** | usado para tarefas e semáforos| 
 
----
 
-## 🔌 Ligações de Hardware
-
-| Componente | GPIO | Função |
-|-------------|------|--------|
-| LED T1 | 16 | Indica execução da tarefa T1 |
-| LED T2 | 5 | Indica execução da tarefa T2 |
-| LED T3 | 18 | Indica execução da tarefa T3 |
-| LED Aperiódica | 21 | Pisca durante execução da tarefa aperiódica |
-| LED Deadline Miss | 2 | Pisca quando há deadline excedido |
-| Botão | 15 | Ativa a tarefa aperiódica |
-| Buzzer | 32 | Emite som quando o orçamento é excedido |
-
----
-
-## 🧮 Resultados Esperados (exemplo de saída Serial)
+## 📊 Exemplo de Saída Serial
 
 ```
-=== Sistema RM + Tarefa Aperiódica + Buzzer ===
 Prioridade atribuída: T1 -> 4
 Prioridade atribuída: T2 -> 3
 Prioridade atribuída: T3 -> 2
 Sistema iniciado com sucesso!
 
-T1: exec=7900us ativ=10 misses=0
-T2: exec=15000us ativ=5 misses=0
-T3: exec=25000us ativ=3 misses=0
-[APERIODICA] Iniciou em 56780000us
-[APERIODICA] Terminou (Duração=9100us)
-[BUDGET] Orçamento excedido (9100us > 8000us)
-🔔 Buzzer ativo por 200ms
+T1: exec=8021us ativ=1 misses=0
+T2: exec=14987us ativ=1 misses=0
+T3: exec=24870us ativ=1 misses=0
+
+[APERIODICA] Iniciou em 785602us
+[APERIODICA] Terminou (Duração=9044us)
+[BUDGET] Orçamento excedido (9044us > 8000us)
+  🔔 Buzzer ativo por 200ms
 
 ========== ANÁLISE ==========
-T1 -> T=200ms, C_médio=7900us, ativ=100, misses=0
-T2 -> T=400ms, C_médio=15000us, ativ=50, misses=0
-T3 -> T=600ms, C_médio=25000us, ativ=30, misses=0
-U_medido = 0.475 (47.5%)
+T1 -> T=200ms, C_médio=8021us, ativ=50, misses=0
+T2 -> T=400ms, C_médio=14987us, ativ=25, misses=0
+T3 -> T=600ms, C_médio=24870us, ativ=17, misses=0
+U_medido = 0.217 (21.7%)
 U_bound = 0.779 (77.9%)
-✅ Sistema escalonável (U <= U_bound)
+  ✅ Sistema escalonável (U <= U_bound)
 =============================
 ```
 
+
+## 📈 Diagrama de Tempo (Timeline)
+
+Representação simplificada da execução das tarefas sob o escalonador **Rate Monotonic**:
+
+```
+Tempo →
+|----200ms----|----400ms----|----600ms----|----800ms----|
+
+T1: ███ ███ ███ ███ ███ ███ ███ ███ ███ ███   (período = 200ms)
+T2: ██████████       ██████████       █████   (período = 400ms)
+T3: ██████████████████               ███████   (período = 600ms)
+AP:           *---Execução on-demand---*        (acionada por botão)
+```
+
+🔹 **Símbolos:**
+- `███` → Execução de tarefa  
+- `*` → Início da tarefa aperiódica  
+- O escalonador **preempte** tarefas de menor prioridade conforme RM
+```
+## 🔄 Fluxo de Execução
+
+
+                ┌────────────────────────────┐
+                │     Sistema Inicializa     │
+                └────────────┬───────────────┘
+                             │
+          ┌──────────────────┴──────────────────┐
+          │                                     │
+ ┌────────▼────────┐                  ┌─────────▼─────────┐
+ │  Criação das    │                  │  ISR do Botão     │
+ │  Tarefas RM     │                  │(Tarefa Aperiódica)│
+ └────────┬────────┘                  └─────────┬─────────┘
+          │                                     │
+ ┌────────▼────────┐                  ┌─────────▼─────────┐
+ │ Execução RM     │                  │  Executa tarefa   │
+ │ (T1, T2, T3)    │                  │  aperiódica       │
+ └────────┬────────┘                  └─────────┬─────────┘
+          │                                     │
+ ┌────────▼───────────────────────────┐         │
+ │  Análise periódica de utilização   │         │
+ │  (U_medido vs U_bound)             │         │
+ └────────────────────────────────────┘         │
+          │                                     │
+          └─────────────────────────────────────┘
+```
+
+## 📎 Requisitos
+
+- **Placa:** ESP32 Dev Module  
+- **IDE:** Arduino IDE (versão 2.x)  
+- **Bibliotecas:** incluídas no pacote ESP32 (FreeRTOS e esp_timer)
+
+
+
+## 🔔 Observações
+
+- Ajuste o **budget** em:
+  ```c
+  const uint32_t D_US = 9000;
+  ```
+- Modifique as cargas das tarefas em:
+  ```c
+  {"T1", 200, 8000, LED_T1, ...}
+  ```
+- O código pode ser expandido para incluir servidores de tarefas aperiódicas (ex.: *Deferrable Server*, *Sporadic Server*).
+
 ---
 
-## 🧩 Conclusão
+**Autores:** Gabriella Arévalo Marques e Hebert Alan Kubis  
+**Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  
+**Data:** Novembro de 2025  
 
-O projeto cumpre **integralmente** os requisitos do trabalho prático definido no Moodle UFSC:
-
-✅ 3 tarefas periódicas com tempos distintos  
-✅ Priorização automática (RM)  
-✅ 1 tarefa aperiódica acionada por botão  
-✅ Visualização real via LEDs e Serial  
-✅ Medição de execução com `esp_timer_get_time()`  
-✅ Cálculo e comparação de U e U_b  
-✅ Buzzer sinalizando estouro de orçamento  
-
-O sistema demonstra na prática o funcionamento do **escalonamento Rate Monotonic**, o comportamento **preemptivo do FreeRTOS**, e os efeitos do **budget excedido** em tarefas aperiódicas.
-
-
-
-## 🧪 Ferramentas e Ambiente
-
-- **Placa:** ESP32 DevKit v1  
-- **IDE:** Arduino IDE / PlatformIO  
-- **Framework:** FreeRTOS  
-- **Linguagem:** C++ (Arduino core)  
-- **Baud Rate Serial:** 115200  
+---

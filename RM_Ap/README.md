@@ -207,6 +207,17 @@ AP:           *---Execução on-demand---*        (acionada por botão)
           │                                     │
           └─────────────────────────────────────┘
 ```
+### 🔹 Fluxo de Execução
+
+```mermaid
+flowchart TD
+    A[Sistema Inicializa] --> B[Criação das Tarefas RM]
+    B --> C[Execução RM (T1, T2, T3)]
+    C --> D[Análise periódica de utilização<br/>(U_medido vs U_bound)]
+    A --> E[ISR do Botão<br/>(Tarefa Aperiódica)]
+    E --> F[Executa tarefa aperiódica]
+    F --> D
+
 
 ## 📎 Requisitos
 

@@ -4,7 +4,7 @@
 
 Este projeto implementa, em um **`ESP32`**, um **sistema de tempo real** baseado no **`escalonamento Rate Monotonic (RM)`**, com suporte a uma **tarefa aperiódica** acionada por botão físico.
 
-O sistema simula a execução de três tarefas periódicas e uma tarefa aperiódica, com análise automática de utilização e alarme sonoro caso o tempo de execução da tarefa aperiódica ultrapasse um **orçamento máximo `budget`** definido.
+O sistema simula a execução de três tarefas periódicas e uma tarefa aperiódica, com análise automática de utilização e alarme sonoro caso o tempo de execução da tarefa aperiódica ultrapasse um **orçamento máximo `deadline`** definido.
 
 ## 🧠 Conceitos Aplicados
 
@@ -16,7 +16,7 @@ O sistema simula a execução de três tarefas periódicas e uma tarefa aperiód
 | **Medição de tempo** | `esp_timer_get_time()` (µs) |
 |**Escalonabilidade** | comparação  `U`<sub>`medido`</sub> ≤ `U`<sub>`bound`</sub>
 | **Jitter e deadline miss** | Verificados com diferença entre execuções |
-| **Orçamento (budget)** | Tempo máximo de execução da tarefa aperiódica |
+| **Orçamento (deadline)** | Tempo máximo de execução da tarefa aperiódica |
 
 ## ⚙️ Funcionalidades
 
@@ -29,8 +29,7 @@ O sistema simula a execução de três tarefas periódicas e uma tarefa aperiód
 | **Cálculo RM** | Análise periódica da utilização do processador e comparação com o limite teórico de Liu & Layland. |
 
 
-## </> Estrutura do Projeto
-Estrutura do Código
+## </> Estrutura do Código
 
 - `TarefaPeriodica`: estrutura de dados das tarefas (período, carga, prioridade, etc.)  
 - `busyWait()`: simula carga de CPU (espera ocupada)  
@@ -38,11 +37,11 @@ Estrutura do Código
 - `tarefaPeriodica()`: rotina genérica para todas as tarefas periódicas  
 - `tarefaAperiodica()`: executa quando o botão é pressionado  
 - `isrBotao()`: interrupção que libera o semáforo da tarefa aperiódica  
-- `analisarUtilizacao()`: calcula `U_medido` e compara com `U_bound`
+- `analisarUtilizacao()`: calcula `U`<sub>`medido`</sub> e compara com `U`<sub>`bound`</sub>
 
 ## 🧩 Estrutura do Projeto
 
-### 🧱 Tarefas Periódicas
+###  **Tarefas Periódicas**
 - **T1:** Período = 200 ms, Carga ≈ 8 ms  
 - **T2:** Período = 400 ms, Carga ≈ 15 ms  
 - **T3:** Período = 600 ms, Carga ≈ 25 ms  
@@ -53,50 +52,50 @@ Cada tarefa:
 - Detecta **deadline misses** (quando tempo de execução > período).  
 - Armazena estatísticas: número de ativações, tempo médio e misses.
 
-### 🔘 Tarefa Aperiódica
+###  **Tarefa Aperiódica**
 - Ativada por **botão físico (GPIO 15)** via **interrupção (ISR)**.
 - Sinaliza execução em um LED dedicado (**LED_AP**).  
 - Mede o tempo total de execução.  
 - Caso **duração > D_US (orçamento)**, o **buzzer (GPIO 32)** é acionado por 200 ms.  
 - O orçamento está definido em:
   ```cpp
-  const uint32_t D_US = 8000; // 8 milissegundos
+  const uint32_t D_US = 9000; // 9 milissegundos
   ```
 
-### 🔔 Buzzer (Budget Overflow)
+###  **Buzzer (Deadline Overflow)**
 - **Pino:** GPIO 32  
 - **Função:** Sinalizar quando a tarefa aperiódica ultrapassa seu tempo limite de execução.  
 - O buzzer emite som durante **200 ms**.
 
 ## 📊 Cálculo e Métricas de Desempenho
 
-### 1️⃣ **Medições Reais**
+### 1️. **Medições Reais**
 As funções `esp_timer_get_time()` e `xTaskGetTickCount()` foram utilizadas para medir:
 - Tempo de execução real de cada tarefa;
 - Jitter entre ativações;
 - Latência da tarefa aperiódica.
 
 
-### 2️⃣ **Utilização Total do Sistema**
+### 2️. **Utilização Total do Sistema**
 
 A **utilização real** do processador é dada por:
 
-\[
+$$
 U = \sum_{i=1}^{n} \frac{C_i}{T_i}
-\]
+$$
 
 onde:
-- \( C_i \) = tempo de computação da tarefa *i*  
-- \( T_i \) = período da tarefa *i*  
-- \( n \) = número de tarefas periódicas  
+- *C<sub>i</sub>* = tempo de computação da tarefa *i*  
+- *T<sub>i</sub>* = período da tarefa *i*  
+- *n* = número de tarefas periódicas  
 
 O valor obtido é comparado com o **limite teórico de Liu & Layland**:
 
-\[
-U_b = n \, (2^{1/n} - 1)
-\]
+$$
+U_b = n \left( 2^{\frac{1}{n}} - 1 \right)
+$$
 
-Se \( U \leq U_b \), o sistema é **escalonável** sob a política **Rate Monotonic (RM)**.
+Se `U`≤ `U`<sub>`b`</sub>, o sistema é **escalonável** sob a política **Rate Monotonic (RM)**.
 
 
 A verificação é feita periodicamente (a cada 10 segundos) via função `analisarUtilizacao()`:
@@ -244,6 +243,15 @@ AP:           *---Execução on-demand---*        (acionada por botão)
 
 👉 [Acesse no GitHub](https://github.com/2005HAK/STR.git) 
 <p align="center">
+
+**Autores:** Gabriella Arévalo Marques e Hebert Alan Kubis  
+**Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  
+**Data:** Novembro de 2025  
+</p>
+
+---
+
+<p align="center">
   <!-- ESP32 -->
   <img src="https://avatars.githubusercontent.com/u/64278475?s=280&v=4" alt="ESP32" width="35"/>
   &nbsp;&nbsp;&nbsp;
@@ -253,9 +261,3 @@ AP:           *---Execução on-demand---*        (acionada por botão)
   <!-- Arduino -->
   <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Arduino_IDE_logo.svg/2048px-Arduino_IDE_logo.svg.png" alt="C" width="35"/>
 </p>
-
-**Autores:** Gabriella Arévalo Marques e Hebert Alan Kubis  
-**Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  
-**Data:** Novembro de 2025  
-
----

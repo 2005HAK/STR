@@ -27,10 +27,10 @@ const int LED_DEADLINE = 2;  // LED acende quando há deadline miss
 const int BOTAO = 15;        // Botão que aciona a tarefa aperiódica
 
 // ================================================================
-//  Buzzer e orçamento de execução (budget)
+//  Buzzer e tempo máximo para execução
 // ================================================================
 const int BUZZER = 32;        // Pino do buzzer
-const uint32_t D_US = 9000;   // Orçamento de tempo máximo da tarefa aperiódica (9 ms)
+const uint32_t D_US = 9000;   // Tempo máximo permitido para execução da tarefa aperiódica (9 ms)
 
 // ================================================================
 //  Estrutura de dados para tarefas periódicas
@@ -65,8 +65,7 @@ TaskHandle_t tarefaAperiodicaHandle = NULL;
 // ================================================================
 void busyWait(uint32_t micros) {
   uint64_t inicio = esp_timer_get_time();
-  while ((esp_timer_get_time() - inicio) < micros)
-    asm volatile("nop");  // instrução vazia para evitar otimizações
+  while ((esp_timer_get_time() - inicio) < micros) asm volatile("nop");  // instrução vazia para evitar otimizações
 }
 
 // ================================================================
@@ -101,7 +100,7 @@ void tarefaPeriodica(void *pvParameters) {
   TickType_t ultimoTick = xTaskGetTickCount();
   TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms);
 
-  while (1) {
+  while(true){
     // Aguarda até o próximo instante exato de execução
     vTaskDelayUntil(&ultimoTick, periodoTicks);
 
@@ -120,17 +119,15 @@ void tarefaPeriodica(void *pvParameters) {
     t->ativacoes++;
 
     // Verifica deadline miss
-    if (exec_us > (t->periodo_ms * 1000)) {
+    if(exec_us > (t->periodo_ms * 1000)){
       t->misses++;
       digitalWrite(LED_DEADLINE, HIGH);
-      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n",
-                    t->nome, (unsigned long long)exec_us, t->periodo_ms);
+      Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n", t->nome, (unsigned long long)exec_us, t->periodo_ms);
       digitalWrite(LED_DEADLINE, LOW);
     }
 
     // Log
-    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n",
-                  t->nome, (unsigned long long)exec_us, t->ativacoes, t->misses);
+    Serial.printf("%s: exec=%lluus ativ=%u misses=%u\n", t->nome, (unsigned long long)exec_us, t->ativacoes, t->misses);
   }
 }
 
@@ -140,7 +137,7 @@ void tarefaPeriodica(void *pvParameters) {
 void tarefaAperiodica(void *pvParameters) {
   (void)pvParameters;
 
-  while (1) {
+  while(true){
     // Espera o semáforo liberado pela interrupção
     if (xSemaphoreTake(semAperiodica, portMAX_DELAY) == pdTRUE) {
       uint64_t inicio = esp_timer_get_time();
@@ -158,8 +155,7 @@ void tarefaAperiodica(void *pvParameters) {
 
       // Verifica estouro do budget
       if (duracao > D_US) {
-        Serial.printf("[BUDGET] Orçamento excedido (%lluus > %luus)\n",
-                      (unsigned long long)duracao, D_US);
+        Serial.printf("Tempo máximo para execução excedido (%lluus > %luus)\n", (unsigned long long)duracao, D_US);
 
         // Alerta sonoro
         digitalWrite(BUZZER, HIGH);
@@ -176,11 +172,9 @@ void tarefaAperiodica(void *pvParameters) {
 void IRAM_ATTR isrBotao() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-  // Libera a tarefa aperiódica
-  xSemaphoreGiveFromISR(semAperiodica, &xHigherPriorityTaskWoken);
+  xSemaphoreGiveFromISR(semAperiodica, &xHigherPriorityTaskWoken);   // Libera a tarefa aperiódica
 
-  // Força troca de contexto se necessário
-  if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+  if(xHigherPriorityTaskWoken) portYIELD_FROM_ISR();                // Força troca de contexto se necessário
 }
 
 // ================================================================
@@ -206,21 +200,16 @@ void analisarUtilizacao() {
 
   // Impressão das métricas de cada tarefa
   for (int i = 0; i < NUM_TAREFAS; i++) {
-    double media = tarefas[i].ativacoes ?
-                   (double)tarefas[i].total_exec_us / tarefas[i].ativacoes : 0.0;
+    double media = tarefas[i].ativacoes ? (double)tarefas[i].total_exec_us / tarefas[i].ativacoes : 0.0;
 
-    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n",
-                  tarefas[i].nome, tarefas[i].periodo_ms, media,
-                  tarefas[i].ativacoes, tarefas[i].misses);
+    Serial.printf("%s -> T=%ums, C_médio=%.0fus, ativ=%u, misses=%u\n", tarefas[i].nome, tarefas[i].periodo_ms, media, tarefas[i].ativacoes, tarefas[i].misses);
   }
 
   Serial.printf("U_medido = %.3f (%.1f%%)\n", U, U * 100.0);
   Serial.printf("U_bound = %.3f (%.1f%%)\n", U_bound, U_bound * 100.0);
 
-  if (U <= U_bound)
-    Serial.println("✅ Sistema escalonável (U <= U_bound)");
-  else
-    Serial.println("⚠️ Sistema NÃO garantido (U > U_bound)");
+  if (U <= U_bound) Serial.println("✅ Sistema escalonável (U <= U_bound)");
+  else Serial.println("⚠️ Sistema NÃO garantido (U > U_bound)");
 
   Serial.println("=============================\n");
 }
@@ -252,26 +241,10 @@ void setup() {
   atribuirPrioridadesRM();
 
   // Cria as tarefas periódicas
-  for (int i = 0; i < NUM_TAREFAS; i++) {
-    xTaskCreate(
-      tarefaPeriodica,
-      tarefas[i].nome,
-      4096,
-      (void *)&tarefas[i],
-      tarefas[i].prioridade,
-      &tarefas[i].handle
-    );
-  }
+  for (int i = 0; i < NUM_TAREFAS; i++) xTaskCreate(tarefaPeriodica, tarefas[i].nome, 4096, (void*)&tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
 
-  // Cria a tarefa aperiódica
-  xTaskCreate(
-    tarefaAperiodica,
-    "APERIODICA",
-    4096,
-    NULL,
-    1,
-    &tarefaAperiodicaHandle
-  );
+  // Cria a tarefa aperiódica com a mais baixa prioridade - Background Scheduling (BS)
+  xTaskCreate(tarefaAperiodica, "APERIODICA", 4096, NULL, tskIDLE_PRIORITY, &tarefaAperiodicaHandle);
 
   Serial.println("Sistema iniciado com sucesso!");
 }

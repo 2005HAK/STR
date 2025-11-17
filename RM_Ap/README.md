@@ -2,9 +2,9 @@
 
 ## 📘 Descrição do Projeto
 
-Este projeto implementa, em um **`ESP32`**, um **sistema de tempo real** baseado no **`escalonamento Rate Monotonic (RM)`**, com suporte a uma **tarefa aperiódica** acionada por botão físico.
+Este projeto implementa, em um **`ESP32`**, um **sistema de tempo real** baseado no **`escalonamento Rate Monotonic (RM)`**, com suporte a uma **tarefa aperiódica** acionada por botão físico escalonada por Background Scheduling (BS).
 
-O sistema simula a execução de três tarefas periódicas e uma tarefa aperiódica, com análise automática de utilização e alarme sonoro caso o tempo de execução da tarefa aperiódica ultrapasse um **orçamento máximo `deadline`** definido.
+O sistema simula a execução de três tarefas periódicas e uma tarefa aperiódica, com análise automática de utilização e alarme sonoro caso o tempo de execução da tarefa aperiódica ultrapasse o **tempo máximo de execução `deadline`** definido.
 
 ## 🧠 Conceitos Aplicados
 
@@ -16,16 +16,16 @@ O sistema simula a execução de três tarefas periódicas e uma tarefa aperiód
 | **Medição de tempo** | `esp_timer_get_time()` (µs) |
 |**Escalonabilidade** | comparação  `U`<sub>`medido`</sub> ≤ `U`<sub>`bound`</sub>
 | **Jitter e deadline miss** | Verificados com diferença entre execuções |
-| **Orçamento (deadline)** | Tempo máximo de execução da tarefa aperiódica |
+| **Tempo máximo aperiódica (deadline)** | Tempo máximo para execução da tarefa aperiódica |
 
 ## ⚙️ Funcionalidades
 
 | Componente | Descrição |
 |-------------|------------|
 | **T1, T2, T3** | Tarefas periódicas com tempos e prioridades distintas. |
-| **Tarefa Aperiódica** | Disparada via botão, executa fora do escalonamento regular. |
-| **LEDs** | Indicam a execução de cada tarefa e *deadline missed*. |
-| **Buzzer** | Toca se a tarefa aperiódica exceder o tempo limite budget. |
+| **Tarefa Aperiódica** | Disparada via botão, executa via Background Scheduling (BS). |
+| **LEDs** | Indicam a execução de cada tarefa e *deadline misses*. |
+| **Buzzer** | Toca se a tarefa aperiódica exceder o tempo máximo de execução. |
 | **Cálculo RM** | Análise periódica da utilização do processador e comparação com o limite teórico de Liu & Layland. |
 
 
@@ -35,8 +35,8 @@ O sistema simula a execução de três tarefas periódicas e uma tarefa aperiód
 - `busyWait()`: simula carga de CPU (espera ocupada)  
 - `atribuirPrioridadesRM()`: define prioridades conforme o período (menor período = maior prioridade)  
 - `tarefaPeriodica()`: rotina genérica para todas as tarefas periódicas  
-- `tarefaAperiodica()`: executa quando o botão é pressionado  
-- `isrBotao()`: interrupção que libera o semáforo da tarefa aperiódica  
+- `tarefaAperiodica()`: executa quando o semáfaro da tarefa aperiódica é liberado
+- `isrBotao()`: interrupção que libera o semáforo da tarefa aperiódica quando o botão é pressionado
 - `analisarUtilizacao()`: calcula `U`<sub>`medido`</sub> e compara com `U`<sub>`bound`</sub>
 
 ## 🧩 Estrutura do Projeto
@@ -48,7 +48,7 @@ O sistema simula a execução de três tarefas periódicas e uma tarefa aperiód
 
 Cada tarefa:
 - Pisca um LED durante sua execução (GPIOs distintos).  
-- Mede tempo real de execução usando `esp_timer_get_time()`.  
+- Mede o tempo real de execução usando `esp_timer_get_time()`.  
 - Detecta **deadline misses** (quando tempo de execução > período).  
 - Armazena estatísticas: número de ativações, tempo médio e misses.
 
@@ -56,8 +56,8 @@ Cada tarefa:
 - Ativada por **botão físico (GPIO 15)** via **interrupção (ISR)**.
 - Sinaliza execução em um LED dedicado (**LED_AP**).  
 - Mede o tempo total de execução.  
-- Caso **duração > D_US (orçamento)**, o **buzzer (GPIO 32)** é acionado por 200 ms.  
-- O orçamento está definido em:
+- Caso **duração > D_US**, o **buzzer (GPIO 32)** é acionado por 200 ms.  
+- O tempo máximo para execução está definido em:
   ```cpp
   const uint32_t D_US = 9000; // 9 milissegundos
   ```
@@ -118,9 +118,9 @@ else
 | LED T2 | 5 | Tarefa periódica 2 |
 | LED T3 | 18 | Tarefa periódica 3 |
 | LED Aperiódica | 21 | Execução da tarefa aperiódica |
-| LED Deadline | 2 | Sinaliza *deadline missed* |
+| LED Deadline | 2 | Sinaliza *deadline misses* |
 | Botão | 15 | Aciona a tarefa aperiódica |
-| Buzzer | 32 | Sinal de aviso de budget excedido |
+| Buzzer | 32 | Sinal de aviso de tempo máximo para execução excedido |
 
 
 ## 🕹️ Como Usar
@@ -129,15 +129,15 @@ else
 2. Abra o **Monitor Serial** (115200 baud).  
 3. Observe os LEDs piscando de acordo com o período de cada tarefa.  
 4. Pressione o **botão (pino 15)** para acionar a tarefa aperiódica.  
-   - Se ela ultrapassar o **tempo limite de 8000 µs**, o **buzzer será acionado**.  
+   - Se ela ultrapassar o **tempo limite de 9000 µs**, o **buzzer será acionado**.  
 5. A cada 10 segundos, o sistema exibe uma **análise de utilização e escalonabilidade**.
 
 ## 📊 Exemplo de Saída Serial
 
 ```
-Prioridade atribuída: T1 -> 4
-Prioridade atribuída: T2 -> 3
-Prioridade atribuída: T3 -> 2
+Prioridade atribuída: T1 -> 3
+Prioridade atribuída: T2 -> 2
+Prioridade atribuída: T3 -> 1
 Sistema iniciado com sucesso!
 
 T1: exec=8021us ativ=1 misses=0
@@ -146,7 +146,7 @@ T3: exec=24870us ativ=1 misses=0
 
 [APERIODICA] Iniciou em 785602us
 [APERIODICA] Terminou (Duração=9044us)
-[BUDGET] Orçamento excedido (9044us > 8000us)
+Tempo máximo para execução excedido (9044us > 8000us)
   🔔 Buzzer ativo por 200ms
 
 ========== ANÁLISE ==========
@@ -176,8 +176,6 @@ AP:                                      *---Execução on-demand---*           
 
 🔹 **Símbolos:**
 - `███` → Execução de tarefa  
-- `*` → Início da tarefa aperiódica  
-- O escalonador **preempte** tarefas de menor prioridade conforme RM
 
 
 ## 🔄 Fluxo de Execução
@@ -219,7 +217,7 @@ AP:                                      *---Execução on-demand---*           
 
 ## 🔔 Observações
 
-- Ajuste o **budget** em:
+- Ajuste o **tempo máximo de execução** em:
   ```c
   const uint32_t D_US = 9000;
   ```

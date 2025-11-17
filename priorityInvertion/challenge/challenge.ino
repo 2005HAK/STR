@@ -25,6 +25,8 @@ TickType_t med_wait = 500;                                                      
 // Globals
 static SemaphoreHandle_t lock;
 
+static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
+
 //*****************************************************************************
 // Tasks
 
@@ -46,9 +48,13 @@ void doTaskL(void *parameters) {
     Serial.print((xTaskGetTickCount() * portTICK_PERIOD_MS) - timestamp);
     Serial.println(" ms waiting for lock. Doing some work...");
 
+    portENTER_CRITICAL(&spinlock);
+
     // Hog the processor for a while doing nothing
     timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS;
     while ( (xTaskGetTickCount() * portTICK_PERIOD_MS) - timestamp < cs_wait);
+
+    portEXIT_CRITICAL(&spinlock);
 
     // Release lock
     Serial.println("Task L releasing lock.");
@@ -96,9 +102,13 @@ void doTaskH(void *parameters) {
     Serial.print((xTaskGetTickCount() * portTICK_PERIOD_MS) - timestamp);
     Serial.println(" ms waiting for lock. Doing some work...");
 
+    portENTER_CRITICAL(&spinlock);
+
     // Hog the processor for a while doing nothing
     timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS;
     while ( (xTaskGetTickCount() * portTICK_PERIOD_MS) - timestamp < cs_wait);
+
+    portEXIT_CRITICAL(&spinlock);
 
     // Release lock
     Serial.println("Task H releasing lock.");

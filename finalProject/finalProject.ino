@@ -6,37 +6,70 @@
 
 // Definição dos pinos GPIO no ESP32 Dev Module (Pinos Seguros)
 // (RS, Enable, D4, D5, D6, D7)
-const int rs = 2;   // Pino de controle 
+const int rs = 5;   // Pino de controle 
 const int en = 4;   // Pino de controle
 const int d4 = 18;  // Pino de dados
 const int d5 = 19;  // Pino de dados
 const int d6 = 23;  // Pino de dados
 const int d7 = 27;  // Pino de dados
 
-// Inicializa o objeto LCD
+// LCD variables
+
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+byte barra_1_linha[] =  {B10000, B10000, B10000, B10000, B10000, B10000, B10000, B10000};
+byte barra_2_linhas[] = {B11000, B11000, B11000, B11000, B11000, B11000, B11000, B11000};
+byte barra_3_linhas[] = {B11100, B11100, B11100, B11100, B11100, B11100, B11100, B11100};
+byte barra_4_linhas[] = {B11110, B11110, B11110, B11110, B11110, B11110, B11110, B11110};
+
+// End LCD variables
+
+// WiFi variables
 
 const char* ssid = "TrabalhoSTR"; 
 const char* password = "123456789";
 
 WebServer server(80);
 
-volatile char currentScheduler[4] = "RM"; // Estado inicial ("RM" ou "EDF")
-static portMUX_TYPE scheduler_spinlock = portMUX_INITIALIZER_UNLOCKED;
+//End WiFi variables
 
-const int statusLedPin = 48; // LED de status do ESP32
+// Sheduler system variable
+
+volatile char currentScheduler[4] = "RM"; // Estado inicial ("RM" ou "EDF")
+static SemaphoreHandle_t mtxSheduler;
+
+const int NUM_TASKS = 2;
+
+typedef struct {
+    const char *name;
+    uint32_t periodo_ms;        // Período da tarefa em milissegundos
+    uint32_t carga_us;
+    int pin;                    // LED associado
+    UBaseType_t prioridade;     // Prioridade atribuída pelo RM
+    uint64_t total_exec_us;     // Soma dos tempos de execução
+    uint32_t ativacoes;         // Contador de execuções
+    uint32_t misses;            // Deadline misses detectados
+} TarefaPeriodica;
+
+TarefaPeriodica tarefas[NUM_TASKS] = {
+    {"CalcLoad", 500, 0, -1, 0, 0, 0, 0},
+    {"Display", 1000, 0, 26, 1, 0, 0, 0}
+};
+
+static SemaphoreHandle_t mtxTasks;
+
+// End sheduler system variables
+
+// Load system variables
+
+static int cpuLoad = 0;
+static SemaphoreHandle_t mtxLoad;
+
+// End load system variables
+
+const int statusLedPin = 2; // LED de status do ESP32
 bool ledEnabled = true; 
 bool IsStarted = true;
-
-TaskHandle_t rtosTaskHandle = NULL; 
-
-static SemaphoreHandle_t mtx;
-
-#if CONFIG_FREERTOS_UNICORE
-  static const BaseType_t app_cpu = 0;
-#else
-  static const BaseType_t app_cpu = 1;
-#endif
 
 void setupPWM() {
     pinMode(statusLedPin, OUTPUT);
@@ -45,31 +78,24 @@ void setupPWM() {
 
 void setScheduler(String mode) {
     if (mode == "RM" || mode == "EDF") {
-
-        xSemaphoreTake(mtx, portMAX_DELAY);
+        xSemaphoreTake(mtxSheduler, portMAX_DELAY);
         strncpy((char*)currentScheduler, mode.c_str(), 3);
-        xSemaphoreGive(mtx);
+        xSemaphoreGive(mtxSheduler);
 
-        if(mode == "RM"){
-            digitalWrite(statusLedPin, HIGH);
-        }else{
-            digitalWrite(statusLedPin, LOW);
-        }
+        if(mode == "RM") digitalWrite(statusLedPin, HIGH);
+        else digitalWrite(statusLedPin, LOW);
 
         Serial.printf("MODO ALTERADO PARA: %s\n", mode.c_str());
-        
-        if (rtosTaskHandle != NULL) {
-        }
     }
 }
 
 // Rota Principal (HTML)
 String htmlPage() {
     // LEITURA SEGURA: Copia o estado volatile para uma String local (não volatile)
-    xSemaphoreTake(mtx, portMAX_DELAY);
+    xSemaphoreTake(mtxSheduler, portMAX_DELAY);
     // O cast (const char*) remove o qualificador volatile para o construtor String
     String currentModeString = (const char*)currentScheduler;
-    xSemaphoreGive(mtx);
+    xSemaphoreGive(mtxSheduler);
 
     String page = "<!DOCTYPE html><html><head><meta charset='utf-8'>";
     page += "<title>Controle de Escalonamento RTOS</title>";
@@ -150,20 +176,16 @@ void handleSetScheduler() {
 }
 
 void handleGetScheduler() {
-    xSemaphoreTake(mtx, portMAX_DELAY);
+    xSemaphoreTake(mtxSheduler, portMAX_DELAY);
     String schedulerMode = (const char*)currentScheduler;
-    xSemaphoreGive(mtx);
+    xSemaphoreGive(mtxSheduler);
     
     server.send(200, "text/plain", schedulerMode);
 }
 
-void handleGetEnabled() { 
-    server.send(200, "text/plain", ledEnabled ? "true" : "false"); 
-}
+void handleGetEnabled() {server.send(200, "text/plain", ledEnabled ? "true" : "false");} 
 
-void handleGetStatus() { 
-    server.send(200, "text/plain", IsStarted ? "true" : "false"); 
-}
+void handleGetStatus() {server.send(200, "text/plain", IsStarted ? "true" : "false");}
 
 void handleToggle() {
     ledEnabled = !ledEnabled;
@@ -171,23 +193,94 @@ void handleToggle() {
     server.send(200, "text/plain", "OK");
 }
 
-void display(void* pvParameters){
+void calcLoad(void* pvParameters){
+    TickType_t ultimoTick = xTaskGetTickCount();
+    TickType_t periodoTicks = pdMS_TO_TICKS(tarefas[1].periodo_ms);
+
+    int i = 0;
+
     for(;;){
-        xSemaphoreTake(mtx, portMAX_DELAY);
+        vTaskDelayUntil(&ultimoTick, periodoTicks);
+
+        cpuLoad = i;
+        i++;
+        if(i >= 100) i = 0;
+/*
+        xSemaphoreTake(mtxLoad, portMAX_DELAY);
+        for(int i = 1; i < NUM_TASKS; i++) {
+            cpuLoad += (tarefas[i].carga_us * 1000) / tarefas[i].periodo_ms;
+        }
+        xSemaphoreGive(mtxLoad);
+*/
+    }
+}
+
+void display(void* pvParameters){
+    TarefaPeriodica* t = (TarefaPeriodica*) pvParameters;
+
+    String pastMode = "RM";
+    String msg = "";
+    int count = 0;
+
+    TickType_t ultimoTick = xTaskGetTickCount();
+    TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms);
+
+    for(;;){
+        vTaskDelayUntil(&ultimoTick, periodoTicks);
+
+        uint64_t inicio = esp_timer_get_time();
+    
+        xSemaphoreTake(mtxSheduler, portMAX_DELAY);
         String mode = (const char*) currentScheduler;
+        xSemaphoreGive(mtxSheduler);
+
         lcd.setCursor(0, 0);
-        lcd.print("TRABALHO");
+        lcd.print("CPU:");
+
+        xSemaphoreTake(mtxLoad, portMAX_DELAY);
+        int load = cpuLoad;
+        xSemaphoreGive(mtxLoad);
+
+        int intLoad = load / 10;
+        int fracLoad = (load % 10) / 2;
+
+        for(int i = 0; i < intLoad; i++) lcd.print((char) 255);
+        if(fracLoad == 1) lcd.write((uint8_t) 0);
+        else if(fracLoad == 2) lcd.write((uint8_t) 1);
+        else if(fracLoad == 3) lcd.write((uint8_t) 2);
+        else if(fracLoad == 4) lcd.write((uint8_t) 3);
+
+        for (int i = 0; i < 10 - (intLoad + ((fracLoad > 0) ? 1 : 0)); i++) lcd.print(' ');
+
+        lcd.setCursor(14, 0);
+        lcd.print(" %");
 
         lcd.setCursor(0, 1); 
-        lcd.print(mode);
+        if(mode != pastMode){
+            msg = pastMode + " -> " + mode;
+            pastMode = mode;
+            count = 1;
+        } else if(count > 0){
+            count++;    
+            if(count >= 5) count = 0;     
+        } else msg = "Sheduler: " + mode;
 
-        int len = mode.length();
-        for (int i = len; i < 16; i++) { // 16 é o número de colunas
-            lcd.print(' ');
+        lcd.print(msg);
+
+        int len = msg.length();
+        for (int i = len; i < 16; i++) lcd.print(' ');
+
+        uint64_t fim = esp_timer_get_time();
+        uint64_t exec_us = fim - inicio;
+
+        t->total_exec_us += exec_us;
+        t->ativacoes++;
+        t->carga_us = exec_us;
+
+        if(exec_us > (t->periodo_ms * 1000)){
+            t->misses++;
+            Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
         }
-        xSemaphoreGive(mtx);
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -203,12 +296,14 @@ void setup() {
         Serial.println("AP iniciado com sucesso!");
         delay(100); 
 
-        // IP (geralmente 192.168.4.1).
+        // IP (192.168.4.1)
         Serial.print("IP do Ponto de Acesso: "); 
         Serial.println(WiFi.softAPIP()); 
     } else Serial.println("ERRO: Falha ao iniciar o Ponto de Acesso (AP)!");
 
-    mtx = xSemaphoreCreateMutex();
+    mtxSheduler = xSemaphoreCreateMutex();
+    mtxLoad = xSemaphoreCreateMutex();
+    mtxTasks = xSemaphoreCreateMutex();
 
     // CONFIGURAÇÃO DAS ROTAS
     server.on("/", handleRoot);
@@ -222,10 +317,16 @@ void setup() {
     Serial.println("Servidor iniciado!");
 
     lcd.begin(16, 2);
+    lcd.createChar(0, barra_1_linha);
+    lcd.createChar(1, barra_2_linhas);
+    lcd.createChar(2, barra_3_linhas);
+    lcd.createChar(3, barra_4_linhas);
 
     Serial.println("LCD Paralelo inicializado.");
 
-    xTaskCreatePinnedToCore(display, "Display", 1024, NULL, 1, NULL, app_cpu);
+    // Cria a tarefa de display no LCD
+    xTaskCreate(calcLoad, tarefas[0].name, 1024, NULL, tarefas[0].prioridade, NULL);
+    xTaskCreate(display, tarefas[1].name, 1024, (void*) &tarefas[1], tarefas[1].prioridade, NULL);
 }
 
 void loop() {

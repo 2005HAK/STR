@@ -1,0 +1,661 @@
+/*
+  Projeto: Escalonamento RM ↔ EDF no ESP32
+  Autores: Gabriella Arévalo e Hebert Alan Kubis
+  Matéria: Sistemas de Tempo Real 2025.2
+
+  Alterações:
+  - rota /metrics que retorna JSON com métricas das tarefas
+  - HTML com gráficos usando Chart.js (CPU, Execução, Misses, Jitter, Prioridade)
+  - cálculo de jitter e leitura de prioridade atual nas tasks
+*/
+
+#include <WiFi.h>
+#include <WebServer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+#include <LiquidCrystal.h>
+#include <ArduinoJson.h>   // Biblioteca para JSON (instale via Library Manager)
+
+// -------------------- Pinos --------------------
+const int BOTAO = 15;
+const int statusLedPin = 2; // LED de status do ESP32
+
+// LCD (paralelo)
+const int rs = 5, en = 4, d4 = 18, d5 = 19, d6 = 23, d7 = 27;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+// caracteres barra
+byte barra_1_linha[] =  {B10000,B10000,B10000,B10000,B10000,B10000,B10000,B10000};
+byte barra_2_linhas[] = {B11000,B11000,B11000,B11000,B11000,B11000,B11000,B11000};
+byte barra_3_linhas[] = {B11100,B11100,B11100,B11100,B11100,B11100,B11100,B11100};
+byte barra_4_linhas[] = {B11110,B11110,B11110,B11110,B11110,B11110,B11110,B11110};
+
+// -------------------- WiFi / WebServer --------------------
+const char* ssid = "TrabalhoSTR";
+const char* password = "123456789";
+WebServer server(80);
+
+// -------------------- Estrutura de tarefas --------------------
+const int NUM_TASKS = 2;
+
+typedef struct {
+    const char *name;
+    uint32_t periodo_ms;        // período nominal (ms)
+    uint32_t carga_us;          // tempo de execução medido (última ativ.)
+    int pin;                    // pino associado (se houver)
+    UBaseType_t prioridade;     // prioridade RM original
+    uint64_t total_exec_us;     // soma de execuções
+    uint32_t ativacoes;         // contador de ativações
+    uint32_t misses;            // deadline misses
+    // EDF
+    uint64_t next_deadline;     // timestamp micros da próxima deadline
+    TaskHandle_t handle;        // handle da task
+    // métricas extras
+    uint32_t jitter_ms;         // jitter em ms (último ciclo)
+    UBaseType_t current_prio;   // prioridade atual (lida em runtime)
+} TarefaPeriodica;
+
+// Tarefas: CalcLoad (300ms) e Display (500ms) - conforme seu último código
+TarefaPeriodica tarefas[NUM_TASKS] = {
+    {"CalcLoad", 300, 0, -1, 1, 0, 0, 0, 0, NULL, 0, 0},
+    {"Display", 500, 0, 26, 2, 0, 0, 0, 0, NULL, 0, 0}
+};
+
+// Tarefa aperiódica
+TarefaPeriodica tarefaAperiodica = {"Aperiodica", 9, 0, -1, tskIDLE_PRIORITY, 0, 0, 0, 0, NULL, 0, 0};
+
+// -------------------- Sincronização --------------------
+static SemaphoreHandle_t mtxSheduler;
+static SemaphoreHandle_t mtxTasks;
+static SemaphoreHandle_t mtxLoad;
+static SemaphoreHandle_t semAperiodica;
+
+// -------------------- Sistema --------------------
+volatile char currentScheduler[4] = "RM"; // "RM" ou "EDF"
+static int cpuLoad = 0;
+bool ledEnabled = true;
+bool IsStarted = true;
+
+// -------------------- Protótipos --------------------
+void displayTaskWrapper(void* pvParameters);
+void calcLoadTaskWrapper(void* pvParameters);
+void tarefaPeriodica(void* pvParameters);
+void taskAperiodica(void* pvParameters);
+void aplicarEDF();
+String htmlPage();
+void handleRoot();
+void handleSetScheduler();
+void handleGetScheduler();
+void handleGetEnabled();
+void handleGetStatus();
+void handleToggle();
+void handleMetrics();
+
+// -------------------- Funções auxiliares --------------------
+void setupPWM(){
+    pinMode(statusLedPin, OUTPUT);
+    digitalWrite(statusLedPin, HIGH);
+}
+
+void setScheduler(String mode) {
+    if (mode == "RM" || mode == "EDF") {
+        xSemaphoreTake(mtxSheduler, portMAX_DELAY);
+        strncpy((char*)currentScheduler, mode.c_str(), 3);
+        xSemaphoreGive(mtxSheduler);
+
+        digitalWrite(statusLedPin, (mode == "RM") ? HIGH : LOW);
+        Serial.printf("MODO ALTERADO PARA: %s\n", mode.c_str());
+    }
+}
+
+// Função busy-wait leve (evitar usar demais nas tasks críticas)
+void busyWait(uint32_t micros) {
+  uint64_t inicio = esp_timer_get_time();
+  while ((esp_timer_get_time() - inicio) < micros) asm volatile("nop");
+}
+
+// -------------------- EDF --------------------
+void aplicarEDF() {
+    xSemaphoreTake(mtxTasks, portMAX_DELAY);
+
+    // cria um array de ponteiros para ordenar sem mover estruturas
+    TarefaPeriodica* arr[NUM_TASKS];
+    for(int i=0;i<NUM_TASKS;i++) arr[i] = &tarefas[i];
+
+    // ordena por next_deadline ascendente (bubble sort simples)
+    for (int i = 0; i < NUM_TASKS - 1; i++) {
+        for (int j = i + 1; j < NUM_TASKS; j++) {
+            if (arr[j]->next_deadline < arr[i]->next_deadline) {
+                TarefaPeriodica* tmp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = tmp;
+            }
+        }
+    }
+
+    // aplica prioridades: arr[0] tem menor deadline -> maior prioridade
+    for (int i = 0; i < NUM_TASKS; i++) {
+        UBaseType_t novaPrio = (NUM_TASKS - i) + 1; // simples mapeamento
+        if (arr[i]->handle != NULL) {
+            vTaskPrioritySet(arr[i]->handle, novaPrio);
+            arr[i]->current_prio = novaPrio;
+        }
+    }
+
+    xSemaphoreGive(mtxTasks);
+}
+
+// calcular e checar EDF / RM dentro da task (retorna modo atual)
+String checkEDF(TarefaPeriodica* t, uint64_t inicio) {
+    // atualiza deadline (em micros)
+    t->next_deadline = inicio + (t->periodo_ms * 1000ULL);
+
+    xSemaphoreTake(mtxSheduler, portMAX_DELAY);
+    String mode = (const char*) currentScheduler;
+    xSemaphoreGive(mtxSheduler);
+
+    if(mode == "EDF") {
+        aplicarEDF();
+    } else {
+        // se RM, restaura prioridade original (t->prioridade)
+        if (t->handle != NULL) {
+            vTaskPrioritySet(t->handle, t->prioridade);
+            t->current_prio = t->prioridade;
+        }
+    }
+    return mode;
+}
+
+// -------------------- Implementações das tasks --------------------
+
+// Tarefa genérica: chama wrapper de acordo com o nome
+void tarefaPeriodica(void* pvParameters){
+    TarefaPeriodica *t = (TarefaPeriodica*) pvParameters;
+
+    // dispatch para funções separadas (como no seu design original)
+    if (strcmp(t->name, "Display") == 0) displayTaskWrapper((void*)t);
+    else if (strcmp(t->name, "CalcLoad") == 0) calcLoadTaskWrapper((void*)t);
+    else {
+        // caso extensível
+        for(;;) vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// Display task (já existente no seu código, adaptada para métricas)
+void displayTaskWrapper(void* pvParameters){
+    TarefaPeriodica* t = (TarefaPeriodica*) pvParameters;
+
+    String pastMode = "RM";
+    String msg = "";
+    int count = 0;
+
+    TickType_t ultimoTick = xTaskGetTickCount();
+    TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms);
+
+    for(;;){
+        // calculamos expectedTick antes do delay para medir jitter depois
+        TickType_t expectedTick = ultimoTick + periodoTicks;
+
+        vTaskDelayUntil(&ultimoTick, periodoTicks); // acorda aqui no tempo exato ou depois
+
+        uint64_t inicio = esp_timer_get_time();
+
+        // --- jitter em ticks: diferença entre wake real e expectedTick ---
+        TickType_t actualTick = xTaskGetTickCount();
+        int32_t jitterTicks = (int32_t)(actualTick - expectedTick);
+        uint32_t jitterMs = (uint32_t)( ( (int32_t)jitterTicks ) * portTICK_PERIOD_MS );
+        t->jitter_ms = jitterMs;
+
+        // --- checa e aplica EDF / RM ---
+        String mode = checkEDF(t, inicio);
+
+        // --- atualiza display ---
+        lcd.setCursor(0, 0);
+        lcd.print("CPU:");
+
+        xSemaphoreTake(mtxLoad, portMAX_DELAY);
+        int load = cpuLoad;
+        xSemaphoreGive(mtxLoad);
+
+        int intLoad = load / 10;
+        int fracLoad = (load % 10) / 2;
+
+        for(int i = 0; i < intLoad; i++) lcd.print((char)255);
+        if(fracLoad == 1) lcd.write((uint8_t)0);
+        else if(fracLoad == 2) lcd.write((uint8_t)1);
+        else if(fracLoad == 3) lcd.write((uint8_t)2);
+        else if(fracLoad == 4) lcd.write((uint8_t)3);
+
+        for (int i = 0; i < 10 - (intLoad + ((fracLoad > 0) ? 1 : 0)); i++) lcd.print(' ');
+
+        lcd.setCursor(14, 0);
+        lcd.print(" %");
+
+        lcd.setCursor(0, 1);
+        if(mode != pastMode){
+            msg = pastMode + " -> " + mode;
+            pastMode = mode;
+            count = 1;
+        } else if(count > 0){
+            count++;
+            if(count >= 5) count = 0;
+        } else msg = "Sched: " + mode;
+
+        lcd.print(msg);
+        int len = msg.length();
+        for (int i = len; i < 16; i++) lcd.print(' ');
+
+        // --- execução (medição da execução da própria rotina de display) ---
+        uint64_t fim = esp_timer_get_time();
+        uint64_t exec_us = fim - inicio;
+
+        t->carga_us = exec_us;
+        t->total_exec_us += exec_us;
+        t->ativacoes++;
+
+        // checar deadline miss (exec > período)
+        if(exec_us > (t->periodo_ms * 1000ULL)){
+            t->misses++;
+            Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n",
+                          t->name, (unsigned long long)exec_us, t->periodo_ms);
+        }
+
+        // atualiza prioridade atual (para o JSON)
+        if(t->handle) t->current_prio = uxTaskPriorityGet(t->handle);
+    }
+}
+
+// CalcLoad task (mantém sua lógica, adaptada para métricas)
+void calcLoadTaskWrapper(void* pvParameters){
+    TarefaPeriodica* t = (TarefaPeriodica*) pvParameters;
+
+    TickType_t ultimoTick = xTaskGetTickCount();
+    TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms);
+    int contador = 0;
+
+    for(;;){
+        TickType_t expectedTick = ultimoTick + periodoTicks;
+        vTaskDelayUntil(&ultimoTick, periodoTicks);
+
+        uint64_t inicio = esp_timer_get_time();
+
+        // jitter
+        TickType_t actualTick = xTaskGetTickCount();
+        int32_t jitterTicks = (int32_t)(actualTick - expectedTick);
+        uint32_t jitterMs = (uint32_t)( ( (int32_t)jitterTicks ) * portTICK_PERIOD_MS );
+        t->jitter_ms = jitterMs;
+
+        // checa/atualiza prioridades EDF/RM
+        checkEDF(t, inicio);
+
+        // calcula utilização aproximada (soma Ci/Ti)
+        float totalUtilization = 0.0f;
+        for(int i = 0; i < NUM_TASKS; i++){
+            if(tarefas[i].periodo_ms > 0){
+                float Ui = (float)tarefas[i].carga_us / (float)(tarefas[i].periodo_ms * 1000.0f);
+                totalUtilization += Ui;
+            }
+        }
+        // incluir aperiódica estimada (se houver)
+        totalUtilization += (float)tarefaAperiodica.carga_us / (float)(tarefaAperiodica.periodo_ms * 1000.0f);
+
+        // reset temporário da carga da aperiódica (você pode optar por outro comportamento)
+        tarefaAperiodica.carga_us = 0;
+
+        // salva cpuLoad (0..100)
+        xSemaphoreTake(mtxLoad, portMAX_DELAY);
+        cpuLoad = (int)(totalUtilization * 100.0f);
+        if(cpuLoad > 100) cpuLoad = 100;
+        xSemaphoreGive(mtxLoad);
+
+        uint64_t fim = esp_timer_get_time();
+        uint64_t exec_us = fim - inicio;
+
+        t->carga_us = exec_us;
+        t->total_exec_us += exec_us;
+        t->ativacoes++;
+
+        if(exec_us > (t->periodo_ms * 1000ULL)){
+            t->misses++;
+            Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
+        }
+
+        // atualiza prioridade atual
+        if(t->handle) t->current_prio = uxTaskPriorityGet(t->handle);
+
+        contador++;
+        if(contador > 100) contador = 0;
+    }
+}
+
+// Tarefa aperiódica (liberada pela ISR)
+void taskAperiodica(void* pvParameters){
+    TarefaPeriodica* t = (TarefaPeriodica*) pvParameters;
+
+    for(;;){
+        if(xSemaphoreTake(semAperiodica, portMAX_DELAY) == pdTRUE){
+            uint64_t inicio = esp_timer_get_time();
+            Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
+
+            // simulação de ~8ms
+            while(esp_timer_get_time() - inicio < 8000) { }
+
+            uint64_t fim = esp_timer_get_time();
+            uint64_t exec_us = fim - inicio;
+
+            t->carga_us = exec_us;
+            t->total_exec_us += exec_us;
+            t->ativacoes++;
+
+            Serial.printf("[APERIODICA] Duracao=%lluus\n", (unsigned long long)exec_us);
+        }
+    }
+}
+
+// ISR do botão
+void IRAM_ATTR isrBotao() {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(semAperiodica, &xHigherPriorityTaskWoken);
+    if(xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+}
+
+// -------------------- ROTA /metrics --------------------
+// Retorna JSON com arrays de métricas para uso pelo Chart.js
+void handleMetrics() {
+    // Tamanho do documento: ajustar conforme necessidade (300..1024)
+    StaticJsonDocument<512> doc;
+    JsonArray tasks = doc.createNestedArray("tasks");
+
+    xSemaphoreTake(mtxTasks, portMAX_DELAY);
+    for (int i = 0; i < NUM_TASKS; i++) {
+        JsonObject obj = tasks.createNestedObject();
+        obj["name"] = tarefas[i].name;
+        obj["exec_us"] = tarefas[i].carga_us;
+        obj["misses"] = tarefas[i].misses;
+        obj["jitter_ms"] = tarefas[i].jitter_ms;
+        obj["priority"] = tarefas[i].current_prio;
+        obj["ativacoes"] = tarefas[i].ativacoes;
+    }
+    xSemaphoreGive(mtxTasks);
+
+    xSemaphoreTake(mtxLoad, portMAX_DELAY);
+    doc["cpu"] = cpuLoad;
+    xSemaphoreGive(mtxLoad);
+
+    xSemaphoreTake(mtxSheduler, portMAX_DELAY);
+    doc["mode"] = (const char*) currentScheduler;
+    xSemaphoreGive(mtxSheduler);
+
+    String out;
+    serializeJson(doc, out);
+    server.send(200, "application/json", out);
+}
+
+// -------------------- HTML (page) --------------------
+String htmlPage() {
+    xSemaphoreTake(mtxSheduler, portMAX_DELAY);
+    String currentModeString = (const char*)currentScheduler;
+    xSemaphoreGive(mtxSheduler);
+
+    String page = "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+    page += "<title>Controle Dinâmico de Escalonamento</title>";
+    page += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    page += "<style>body{font-family:sans-serif;background:#111;color:#eee;text-align:center;} .button-container{margin:20px 0; padding: 15px; border-radius: 8px; background: #222;} button{padding:10px 18px;margin:6px;border:none;border-radius:5px;cursor:pointer;font-size:14px;} .tabs{display:flex;gap:8px;justify-content:center;margin-top:10px;} .tab{padding:8px 12px;background:#222;border-radius:6px;cursor:pointer;} .tab.active{background:#4caf50;} canvas{background:#fff;margin:10px auto;display:block;border-radius:6px;padding:6px;} .status{font-size:18px;padding:6px;background:#222;border-radius:6px;display:inline-block;margin-top:8px;}</style>";
+    page += "</head><body>";
+    page += "<h1>Controle Dinâmico de Escalonamento</h1>";
+
+    // status e botões
+    page += "<div class='status'>Modo: <span id='currentMode'>" + currentModeString + "</span></div>";
+    page += "<div class='button-container'>";
+    page += "<button onclick='setMode(\"RM\")'>RM</button>";
+    page += "<button onclick='setMode(\"EDF\")'>EDF</button>";
+    page += "</div>";
+
+    // abas
+    page += "<div class='tabs'><div class='tab active' id='tabCpu' onclick='showTab(\"cpu\")'>CPU</div><div class='tab' id='tabExec' onclick='showTab(\"exec\")'>Exec / Misses</div><div class='tab' id='tabJitter' onclick='showTab(\"jitter\")'>Jitter</div><div class='tab' id='tabPrio' onclick='showTab(\"prio\")'>Prioridade</div></div>";
+
+    // canvases (apenas 1 visível por vez)
+    page += "<div id='panelCpu'><canvas id='cpuChart' width='600' height='200'></canvas></div>";
+    page += "<div id='panelExec' style='display:none;'><canvas id='execChart' width='600' height='200'></canvas><canvas id='missChart' width='600' height='200'></canvas></div>";
+    page += "<div id='panelJitter' style='display:none;'><canvas id='jitterChart' width='600' height='200'></canvas></div>";
+    page += "<div id='panelPrio' style='display:none;'><canvas id='prioChart' width='600' height='200'></canvas></div>";
+
+    // Chart.js via CDN e script de atualização
+    page += R"(
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    // simples helper para alternar abas
+    function showTab(name){
+        document.getElementById('panelCpu').style.display = (name=='cpu')?'block':'none';
+        document.getElementById('panelExec').style.display = (name=='exec')?'block':'none';
+        document.getElementById('panelJitter').style.display = (name=='jitter')?'block':'none';
+        document.getElementById('panelPrio').style.display = (name=='prio')?'block':'none';
+        // botões
+        document.getElementById('tabCpu').classList.remove('active');
+        document.getElementById('tabExec').classList.remove('active');
+        document.getElementById('tabJitter').classList.remove('active');
+        document.getElementById('tabPrio').classList.remove('active');
+        document.getElementById('tab'+(name.charAt(0).toUpperCase()+name.slice(1))).classList.add('active');
+    }
+
+    async function setMode(mode){
+        await fetch('/setScheduler?mode=' + mode);
+        document.getElementById('currentMode').innerText = mode;
+    }
+
+    // dados e gráficos
+    const maxPoints = 30; // quantos pontos manter no gráfico
+
+    let labels = [];
+    let cpuData = [];
+
+    // Chart CPU
+    const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+    const cpuChart = new Chart(cpuCtx, {
+        type: 'line',
+        data: { labels: labels, datasets: [{ label: 'CPU (%)', data: cpuData, fill:false }] },
+        options: { scales: { y: { suggestedMin: 0, suggestedMax: 100 } } }
+    });
+
+    // Exec chart (uma linha por task)
+    const execCtx = document.getElementById('execChart').getContext('2d');
+    const execChart = new Chart(execCtx, {
+        type: 'line',
+        data: { labels: labels, datasets: [] },
+        options: { scales: { y: { suggestedMin: 0 } } }
+    });
+
+    // Miss chart
+    const missCtx = document.getElementById('missChart').getContext('2d');
+    const missChart = new Chart(missCtx, {
+        type: 'line',
+        data: { labels: labels, datasets: [] },
+        options: { scales: { y: { suggestedMin: 0 } } }
+    });
+
+    // Jitter chart
+    const jitterCtx = document.getElementById('jitterChart').getContext('2d');
+    const jitterChart = new Chart(jitterCtx, {
+        type: 'line',
+        data: { labels: labels, datasets: [] },
+        options: { scales: { y: { suggestedMin: 0 } } }
+    });
+
+    // Priority chart
+    const prioCtx = document.getElementById('prioChart').getContext('2d');
+    const prioChart = new Chart(prioCtx, {
+        type: 'line',
+        data: { labels: labels, datasets: [] },
+        options: { scales: { y: { suggestedMin: 0 } } }
+    });
+
+    // mantém datasets por tarefa (por nome)
+    const execDatasets = {};
+    const missDatasets = {};
+    const jitterDatasets = {};
+    const prioDatasets = {};
+
+    async function updateMetrics(){
+        try {
+            const res = await fetch('/metrics');
+            const data = await res.json();
+
+            const now = new Date().toLocaleTimeString();
+            labels.push(now);
+            if(labels.length > maxPoints) labels.shift();
+
+            // CPU
+            cpuData.push(data.cpu);
+            if(cpuData.length > maxPoints) cpuData.shift();
+
+            // tasks
+            data.tasks.forEach((t, idx)=>{
+                // exec datasets
+                if(!execDatasets[t.name]){
+                    const color = `hsl(${(idx*80)%360} 70% 50%)`;
+                    execDatasets[t.name] = { label: t.name + ' (us)', data: [], borderColor: color, fill:false };
+                    execChart.data.datasets.push(execDatasets[t.name]);
+
+                    missDatasets[t.name] = { label: t.name + ' misses', data: [], borderColor: color, fill:false };
+                    missChart.data.datasets.push(missDatasets[t.name]);
+
+                    jitterDatasets[t.name] = { label: t.name + ' jitter(ms)', data: [], borderColor: color, fill:false };
+                    jitterChart.data.datasets.push(jitterDatasets[t.name]);
+
+                    prioDatasets[t.name] = { label: t.name + ' prio', data: [], borderColor: color, fill:false };
+                    prioChart.data.datasets.push(prioDatasets[t.name]);
+                }
+
+                execDatasets[t.name].data.push(t.exec_us);
+                missDatasets[t.name].data.push(t.misses);
+                jitterDatasets[t.name].data.push(t.jitter_ms);
+                prioDatasets[t.name].data.push(t.priority);
+
+                // trim
+                if(execDatasets[t.name].data.length > maxPoints) execDatasets[t.name].data.shift();
+                if(missDatasets[t.name].data.length > maxPoints) missDatasets[t.name].data.shift();
+                if(jitterDatasets[t.name].data.length > maxPoints) jitterDatasets[t.name].data.shift();
+                if(prioDatasets[t.name].data.length > maxPoints) prioDatasets[t.name].data.shift();
+            });
+
+            // trim labels
+            cpuChart.update();
+            execChart.update();
+            missChart.update();
+            jitterChart.update();
+            prioChart.update();
+
+        } catch(e){
+            console.log("Erro /metrics:", e);
+        }
+    }
+
+    // atualiza cada 1s
+    setInterval(updateMetrics, 1000);
+    // chamada inicial
+    updateMetrics();
+
+    </script>
+    )";
+
+    page += "</body></html>";
+    return page;
+}
+
+// -------------------- Handlers HTTP --------------------
+void handleRoot() { server.send(200, "text/html", htmlPage()); }
+
+void handleSetScheduler() {
+    if (server.hasArg("mode")) {
+        String mode = server.arg("mode");
+        if (mode == "RM" || mode == "EDF") {
+            setScheduler(mode);
+            server.send(200, "text/plain", "Scheduler set to " + mode);
+            return;
+        }
+    }
+    server.send(400, "text/plain", "Argumento 'mode' inválido.");
+}
+
+void handleGetScheduler() {
+    xSemaphoreTake(mtxSheduler, portMAX_DELAY);
+    String schedulerMode = (const char*)currentScheduler;
+    xSemaphoreGive(mtxSheduler);
+
+    server.send(200, "text/plain", schedulerMode);
+}
+
+void handleGetEnabled() { server.send(200, "text/plain", ledEnabled ? "true" : "false"); }
+void handleGetStatus() { server.send(200, "text/plain", IsStarted ? "true" : "false"); }
+void handleToggle() {
+    ledEnabled = !ledEnabled;
+    digitalWrite(statusLedPin, ledEnabled ? HIGH : LOW);
+    server.send(200, "text/plain", "OK");
+}
+
+// rota metrics
+void handleMetricsWrapper() { handleMetrics(); }
+
+// -------------------- setup e loop --------------------
+void setup() {
+    Serial.begin(115200);
+
+    // configura pinos
+    pinMode(BOTAO, INPUT_PULLDOWN);
+    pinMode(statusLedPin, OUTPUT);
+
+    // WiFi AP
+    WiFi.mode(WIFI_AP);
+    bool result = WiFi.softAP(ssid, password);
+    if(result){
+        Serial.println("AP iniciado com sucesso!");
+        Serial.print("IP do Ponto de Acesso: ");
+        Serial.println(WiFi.softAPIP());
+    } else Serial.println("ERRO: Falha ao iniciar o Ponto de Acesso (AP)!");
+
+    // cria semáforos / mutexes
+    mtxSheduler = xSemaphoreCreateMutex();
+    mtxLoad = xSemaphoreCreateMutex();
+    mtxTasks = xSemaphoreCreateMutex();
+    semAperiodica = xSemaphoreCreateBinary();
+
+    // interrupção do botão
+    attachInterrupt(digitalPinToInterrupt(BOTAO), isrBotao, FALLING);
+
+    // rotas
+    server.on("/", handleRoot);
+    server.on("/setScheduler", handleSetScheduler);
+    server.on("/getScheduler", handleGetScheduler);
+    server.on("/toggle", handleToggle);
+    server.on("/getEnabled", handleGetEnabled);
+    server.on("/getStatus", handleGetStatus);
+    server.on("/metrics", handleMetricsWrapper); // rota para gráficos
+
+    server.begin();
+    Serial.println("Servidor iniciado!");
+
+    // LCD
+    lcd.begin(16, 2);
+    lcd.createChar(0, barra_1_linha);
+    lcd.createChar(1, barra_2_linhas);
+    lcd.createChar(2, barra_3_linhas);
+    lcd.createChar(3, barra_4_linhas);
+
+    Serial.println("LCD Paralelo inicializado.");
+
+    // cria tarefas periódicas
+    for(int i = 0; i < NUM_TASKS; i++) {
+        xTaskCreate(tarefaPeriodica, tarefas[i].name, 4096, &tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
+    }
+
+    // cria aperiódica
+    xTaskCreate(taskAperiodica, "Aperiodica", 4096, &tarefaAperiodica, tarefaAperiodica.prioridade, &tarefaAperiodica.handle);
+
+    Serial.println("Sistema iniciado!");
+}
+
+void loop() {
+    server.handleClient();
+    vTaskDelay(pdMS_TO_TICKS(10));
+}

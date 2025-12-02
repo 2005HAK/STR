@@ -2,6 +2,7 @@
     "files.associations": {
         "mutex": "cpp",
         "string": "cpp",
-        "rm_edf+interface_web": "cpp"
+        "rm_edf+interface_web": "cpp",
+        "str from the hell": "c"
     }
 }

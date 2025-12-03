@@ -18,6 +18,7 @@
 // Pins
 const int BOTAO = 15;
 const int statusLedPin = 2; // LED de status do ESP32
+const int BUZZER = 22;
 
 // End Pins
 
@@ -167,7 +168,7 @@ void taskAperiodica(void* pvParameters){
 
             Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
 
-            busyWait(8000); // Simula carga de ~8ms
+            busyWait(8500); // Simula carga de ~8ms
 
             uint64_t fim = esp_timer_get_time();
             uint64_t exec_us = fim - inicio;
@@ -175,6 +176,14 @@ void taskAperiodica(void* pvParameters){
             t->carga_us = exec_us;
             t->total_exec_us += exec_us;
             t->ativacoes++;
+
+            if(exec_us > (t->periodo_ms * 1000ULL)){
+                t->misses++;
+                digitalWrite(BUZZER, HIGH);
+                busyWait(300);
+                digitalWrite(BUZZER, LOW);
+                Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
+            }
 
             Serial.printf("[APERIODICA] Duracao=%lluus\n", (unsigned long long)exec_us);
         }
@@ -618,6 +627,7 @@ void setup() {
     // Configuração dos pinos
     pinMode(BOTAO, INPUT_PULLDOWN);
     pinMode(statusLedPin, OUTPUT);
+    pinMode(BUZZER, OUTPUT);
 
     // Fim configuração dos pinos
     

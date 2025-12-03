@@ -1,4 +1,4 @@
-# 📊 Escalonamento em Tempo Real: RM vs. EDF no ESP32
+# 💻 Sistema Reativo de Tempo Real com Gerenciamento Dinâmico de Carga: RM 🆚 EDF no ESP32
 
 <div style="text-align: justify">
 Este projeto implementa um sistema comparativo de escalonamento de tarefas em tempo real utilizando <strong>FreeRTOS</strong> no ESP32. O sistema permite alternar dinamicamente entre os algoritmos <strong>Rate Monotonic (RM)</strong> e <strong>Earliest Deadline First (EDF)</strong>, oferecendo visualização de métricas via interface Web.
@@ -65,7 +65,6 @@ Este projeto implementa, em um ESP32, um sistema de escalonamento comutável ent
 * Abas de visualização
 * Atualização a cada 250 ms
 
-
 ## 🌐 Interface Web
 
 A página HTML é enviada com `server.send()` e contém:
@@ -80,64 +79,42 @@ A página HTML é enviada com `server.send()` e contém:
 ```html
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 ```
+## ⏳ Fluxograma do Sistema
+<div style="text-align: justify">
 
-
+```
+             ┌─────────────────────┐
+             │        Início       │
+             └──────────┬──────────┘
+                        │
+        ┌───────────────▼────────────────┐
+        │   Inicializa WiFi (modo STA)   │
+        │     Inicializa WebServer       │
+        │    Cria tarefas periódicas     │
+        └───────────────┬────────────────┘
+                        │
+              ┌─────────▼─────────┐
+              │   Loop Principal  │
+              └─────────┬─────────┘
+                        │
+       ┌────────────────▼────────────────┐
+       │      Scheduler (RM ou EDF)      │
+       │  Ordena tarefas por prioridade  │
+       └────────────────┬────────────────┘
+                        │
+       ┌────────────────▼───────────────────┐
+       │        Execução das Tarefas        │
+       │ - Mede tempo real                  │
+       │ - Registra atraso e deadline miss  │
+       │ - Envia dados para interface web   │
+       └────────────────┬───────────────────┘
+                        │
+                 ┌──────▼───────┐
+                 │Web Dashboard │
+                 └──────────────┘
+```
 ## 🔌 Pinos Utilizados
 
-O projeto utiliza os seguintes pinos do ESP32:
-
-| Componente | GPIO | Descrição |
-| :--- | :--- | :--- |
-| **Botão** | 15 | Dispara a tarefa aperiódica (Input Pull-down) |
-| **LED Status** | 2 | Indica o estado do sistema |
-| **Buzzer** | 22 | Alerta sonoro de *Deadline Miss* |
-| **LCD - RS** | 5 | Sinal Register Select do LCD |
-| **LCD - EN** | 4 | Sinal Enable do LCD |
-| **LCD - D4** | 18 | Barramento de dados LCD |
-| **LCD - D5** | 19 | Barramento de dados LCD |
-| **LCD - D6** | 23 | Barramento de dados LCD |
-| **LCD - D7** | 27 | Barramento de dados LCD |
-
-## ⚙️ Configuração e Execução
-
-### 1. Configurar Credenciais Wi-Fi
-Para que o dashboard funcione corretamente (baixando a biblioteca `Chart.js` da internet), é necessário configurar sua rede local. Edite as seguintes linhas no início do código:
-
-```cpp
-const char* ssid = "NOME_DA_SUA_REDE"; 
-const char* password = "SUA_SENHA";
-```
-
-## 📊 Comparativo de Escalonamento em Tempo Real: RM vs. EDF (ESP32)
-
-<div style="text-align: justify">
-Este projeto implementa e compara dois algoritmos clássicos de escalonamento de tempo real — <strong>Rate Monotonic (RM)</strong> e <strong>Earliest Deadline First (EDF)</strong> — utilizando o <strong>FreeRTOS</strong> em um microcontrolador ESP32.
-
-O sistema permite a alternância dinâmica entre os modos de escalonamento e oferece um dashboard web para visualização de métricas em tempo real (Carga da CPU, Jitter, Misses e Prioridades).
-</div>
-
-## 🚀 Funcionalidades
-
-### Troca de Escalonador em Tempo Real
-* **RM (Rate Monotonic):** Prioridades fixas baseadas no período (menor período = maior prioridade).
-* **EDF (Earliest Deadline First):** Prioridades dinâmicas reatribuídas em tempo de execução com base no prazo (deadline) mais próximo.
-
-### Tarefas do Sistema
-* **Display** (Periódica, 500ms): Atualiza o LCD físico.
-* **CalcLoad** (Periódica, 300ms): Calcula a carga da CPU.
-* **Aperiodica** (Esporádica): Disparada por botão, simula uma carga pesada (~8.5ms) para testar a robustez do sistema.
-
-### Dashboard Web
-* Interface HTML hospedada no próprio ESP32.
-* Gráficos via **Chart.js** para monitoramento de Jitter, execução e deadlines perdidos.
-* Controle remoto para alternar entre RM e EDF.
-
-### Feedback Físico
-* Display LCD 16x2 para status local.
-* Buzzer para alerta sonoro de perda de prazo (*Deadline Miss*).
-
-## 🛠️ Hardware Necessário e Pinagem
-
 | Componente | Pino ESP32 (GPIO) | Função |
 | :--- | :--- | :--- |
 | **Botão** | GPIO 15 | Dispara tarefa aperiódica (Interrupção) |
@@ -150,169 +127,35 @@ O sistema permite a alternância dinâmica entre os modos de escalonamento e ofe
 | **LCD - D6** | GPIO 23 | Dados LCD |
 | **LCD - D7** | GPIO 27 | Dados LCD |
 
-## 📦 Dependências de Software
 
-Certifique-se de instalar as seguintes bibliotecas na IDE do Arduino ou PlatformIO:
-
-* **LiquidCrystal** (para controle do LCD paralelo)
-* **ArduinoJson** (versão 6 ou superior, para serialização dos dados do dashboard)
-* **WiFi** & **WebServer** (Nativas do core ESP32)
-
-## ⚙️ Configuração e Instalação
-
-### 1. Configurar Wi-Fi
-<div style="text-align: justify">
-Abra o código e localize as seguintes linhas para inserir as credenciais da sua rede (necessário para baixar a biblioteca Chart.js no navegador):
-</div>
-
-```cpp
-const char* ssid = "NOME_DA_SUA_REDE";
-const char* password = "SUA_SENHA";
-```
-### 2. Upload
-Compile e carregue o código para o seu ESP32.
-
-### 3. Acessar o Dashboard
-* Abra o Monitor Serial (Baud Rate: 115200).
-
-* Reinicie o ESP32.
-
-* Copie o endereço IP exibido (ex: 192.168.1).
-
-* Cole o endereço IP no navegador do seu computador ou celular (conectado à mesma rede).
-
-## 🧠 Como Funciona o EDF no FreeRTOS
-
-<div style="text-align: justify">
-O FreeRTOS nativamente é um sistema de prioridade fixa (preemptivo). Para simular o EDF, este projeto utiliza uma técnica de reatribuição dinâmica:
-
-* As tarefas calculam seus próprios deadlines absolutos.
-
-* A função aplicarEDF() é chamada periodicamente.
-
-* Ela ordena as tarefas com base no next_deadline.
-
-* A função utiliza vTaskPrioritySet() para alterar a prioridade das tarefas no kernel do FreeRTOS, garantindo que a tarefa com o prazo mais curto tenha a maior prioridade numérica naquele instante.
-</div>
-
-## 📊 Comparativo de Escalonamento em Tempo Real: RM vs. EDF (ESP32)
-
-<div style="text-align: justify">
-Este projeto implementa e compara dois algoritmos clássicos de escalonamento de tempo real — <strong>Rate Monotonic (RM)</strong> e <strong>Earliest Deadline First (EDF)</strong> — utilizando o <strong>FreeRTOS</strong> em um microcontrolador ESP32.
-</div>
-
-<br>
-
-<div style="text-align: justify">
-O sistema permite a alternância dinâmica entre os modos de escalonamento e oferece um dashboard web para visualização de métricas em tempo real (Carga da CPU, Jitter, Misses e Prioridades).
-</div>
-
-## 📝 Informações do Projeto
-
-* **Autores:** Gabriella Arévalo e Hebert Alan Kubis
-* **Matéria:** Sistemas de Tempo Real (2025.2)
-* **Plataforma:** ESP32 (Arduino Framework)
-
-## 🚀 Funcionalidades
-
-### Troca de Escalonador em Tempo Real
-* **RM (Rate Monotonic):** Prioridades fixas baseadas no período (menor período = maior prioridade).
-* **EDF (Earliest Deadline First):** Prioridades dinâmicas reatribuídas em tempo de execução com base no prazo (deadline) mais próximo.
-
-### Tarefas do Sistema
-* **Display** (Periódica, 500ms): Atualiza o LCD físico.
-* **CalcLoad** (Periódica, 300ms): Calcula a carga da CPU.
-* **Aperiodica** (Esporádica): Disparada por botão, simula uma carga pesada (~8.5ms) para testar a robustez do sistema.
-
-### Dashboard Web
-* Interface HTML hospedada no próprio ESP32.
-* Gráficos via **Chart.js** para monitoramento de Jitter, execução e deadlines perdidos.
-* Controle remoto para alternar entre RM e EDF.
-
-### Feedback Físico
-* Display LCD 16x2 para status local.
-* Buzzer para alerta sonoro de perda de prazo (*Deadline Miss*).
-
-## 🛠️ Hardware Necessário e Pinagem
-
-| Componente | Pino ESP32 (GPIO) | Função |
-| :--- | :--- | :--- |
-| **Botão** | GPIO 15 | Dispara tarefa aperiódica (Interrupção) |
-| **Buzzer** | GPIO 22 | Alerta de Deadline Miss |
-| **LED Status** | GPIO 2 | Indica modo de operação (RM = Ligado) |
-| **LCD - RS** | GPIO 5 | Controle do LCD |
-| **LCD - EN** | GPIO 4 | Controle do LCD |
-| **LCD - D4** | GPIO 18 | Dados LCD |
-| **LCD - D5** | GPIO 19 | Dados LCD |
-| **LCD - D6** | GPIO 23 | Dados LCD |
-| **LCD - D7** | GPIO 27 | Dados LCD |
-
-## 📦 Dependências de Software
-
-Certifique-se de instalar as seguintes bibliotecas na IDE do Arduino ou PlatformIO:
-
-* **LiquidCrystal** (para controle do LCD paralelo)
-* **ArduinoJson** (versão 6 ou superior, para serialização dos dados do dashboard)
-* **WiFi** & **WebServer** (Nativas do core ESP32)
-
-## ⚙️ Configuração e Instalação
-
-### 1. Configurar Wi-Fi
-<div style="text-align: justify">
-Abra o código e localize as seguintes linhas para inserir as credenciais da sua rede (necessário para baixar a biblioteca Chart.js no navegador):
-</div>
-
-```cpp
-const char* ssid = "NOME_DA_SUA_REDE";
-const char* password = "SUA_SENHA";
-```
-
-### 2. Upload
-Compile e carregue o código para o seu ESP32.
-
-3. Acessar o Dashboard
-Abra o Monitor Serial (Baud Rate: 115200).
-
-Reinicie o ESP32.
-
-Copie o endereço IP exibido (ex: 192.168.1.105).
-
-Cole o endereço IP no navegador do seu computador ou celular (conectado à mesma rede).
-
-## 🧠 Como Funciona o EDF no FreeRTOS
- O **FreeRTOS** nativamente é um sistema de prioridade fixa (preemptivo). Para simular o **EDF**, este projeto utiliza uma técnica de reatribuição dinâmica:
-
-* As tarefas calculam seus próprios deadlines absolutos.
-
-* A função aplicarEDF() é chamada periodicamente.
-
-* Ela ordena as tarefas com base no `next_deadline`.
-
-A função utiliza `vTaskPrioritySet()` para alterar a prioridade das tarefas no kernel do **FreeRTOS**, garantindo que a tarefa com o prazo mais curto tenha a maior prioridade numérica naquele instante.
-
-Usado pelos gráficos da interface.
-
-## 🕒 Diagrama de Escalonamento
+## 🧮 Diagrama de Escalonamento
 
 * Cada tarefa recebe `next_deadline = now + periodo`
 * Tarefas são ordenadas por deadline
 * Prioridades são atribuídas dinamicamente: **tarefa mais urgente → prioridade mais alta**
  
-## RM — Prioridade fixa (menor período = maior prioridade)
+### RM — Prioridade fixa (menor período = maior prioridade)
 
 **Linha do tempo →**\
-T1: `|■■|    |■■|    |■■|    |■■|` \
+T1: `|■■|     |■■|    |■■|    |■■|` \
 T2: `    |■■■■|      |■■■■|`\
 T3: `         |■■■■■■■■|`
 
 
-## EDF — Prioridade dinâmica (menor deadline primeiro)
+### EDF — Prioridade dinâmica (menor deadline primeiro)
 
 **Linha do tempo →**\
 T1: `|■■| |■■| |■■| |■■|`\
-T3: `     |■■■■|     |■■■■|`\
+T3: `    |■■■■|     |■■■■|`\
 T2: `         |■■■■|`
 
+
+## 📝 Comparativo de Escalonamento em Tempo Real: RM vs. EDF (ESP32)
+<div style="text-align: justify">
+Este projeto implementa e compara dois algoritmos clássicos de escalonamento de tempo real — <strong>Rate Monotonic (RM)</strong> e <strong>Earliest Deadline First (EDF)</strong> — utilizando o <strong>FreeRTOS</strong> em um microcontrolador ESP32.
+
+O sistema permite a alternância dinâmica entre os modos de escalonamento e oferece um dashboard web para visualização de métricas em tempo real (Carga da CPU, Jitter, Misses e Prioridades).
+</div>
 
 ## 📊 Métricas Calculadas
 
@@ -330,17 +173,32 @@ Para compilar este projeto, certifique-se de ter as seguintes bibliotecas instal
 2.  **LiquidCrystal** (Biblioteca padrão para LCDs paralelos)
 3.  **WiFi.h** & **WebServer** (Nativas do core ESP32)
 4. **FreeRTOS** (nativo no ESP32)
-## ▶️ Execução
 
-1. Altere SSID e senha Wi-Fi
-2. Faça upload do código
-3. Abra o Serial Monitor para ver o IP (“Connected at: …”)
-4. Entre no **navegador e acesse**:
+## ▶️ Instalação Execução
+
+### Configurar Wi-Fi
+
+Abra o código e localize as seguintes linhas para inserir as credenciais da sua rede (necessário para baixar a biblioteca Chart.js no navegador):
+
+```cpp
+const char* ssid = "NOME_DA_SUA_REDE";
+const char* password = "SUA_SENHA";
+```
+### Upload
+Compile e carregue o código para o seu ESP32.
+
+### Acessar o Dashboard
+1. Abra o Monitor Serial (Baud Rate: 115200).
+
+2. Reinicie o ESP32.
+
+3. Abra o Serial Monitor para ver o IP (“Connected at: …”) e copie o endereço IP exibido (ex: 192.168.1).
+
+4. Cole o endereço IP no navegador do seu computador ou celular (conectado à mesma rede)e acesse:
 
 ```
-http://<seu-esp32>
+http://<IP do seu esp32>
 ```
-
 5. Use os botões para alternar entre **RM ↔ EDF**
 6. Observe gráficos em tempo real
 
@@ -361,8 +219,6 @@ http://<seu-esp32>
 **Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  
 **Data:** Novembro de 2025  
 </p>
-
-
 
 <p align="center">
   <!-- ESP32 -->

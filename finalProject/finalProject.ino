@@ -14,11 +14,15 @@
 #include <freertos/semphr.h> // Correção: caminho do include (case sensitive em alguns sistemas)
 #include <LiquidCrystal.h>
 #include <ArduinoJson.h>
+#include <ESP32Servo.h>
 
 // Pins
 const int BOTAO = 15;
 const int statusLedPin = 2; // LED de status do ESP32
 const int BUZZER = 22;
+const int SERVO = 32;
+
+Servo servo;
 
 // End Pins
 
@@ -46,7 +50,7 @@ WebServer server(80);
 volatile char currentScheduler[4] = "RM"; // Estado inicial ("RM" ou "EDF")
 static SemaphoreHandle_t mtxSheduler;
 
-const int NUM_TASKS = 2;
+const int NUM_TASKS = 3;
 
 typedef struct {
     const char *name;
@@ -68,7 +72,8 @@ typedef struct {
 
 TarefaPeriodica tarefas[NUM_TASKS] = {
     {"CalcLoad", 300, 0, -1, 1, 0, 0, 0, 0, NULL, 0, 0},
-    {"Display", 500, 0, 26, 2, 0, 0, 0, 0, NULL, 0, 0}
+    {"Display", 500, 0, 26, 2, 0, 0, 0, 0, NULL, 0, 0},
+    {"Random", 700, 0, -1, 3, 0, 0, 0, 0, NULL, 0, 0}
 };
 
 TarefaPeriodica tarefaAperiodica = {"Aperiodica", 9, 0, -1, tskIDLE_PRIORITY, 0, 0, 0, 0, NULL, 0, 0};
@@ -94,6 +99,25 @@ void aplicarEDF();
 void busyWait(uint32_t micros) {
     uint64_t inicio = esp_timer_get_time();
     while ((esp_timer_get_time() - inicio) < micros) asm volatile("nop");
+}
+
+void atribuirPrioridadesRM() {
+    // Ordena as tarefas pelo período
+    for (int i = 0; i < NUM_TASKS - 1; i++) {
+        for (int j = i + 1; j < NUM_TASKS; j++) {
+        if (tarefas[j].periodo_ms < tarefas[i].periodo_ms) {
+            TarefaPeriodica temp = tarefas[i];
+            tarefas[i] = tarefas[j];
+            tarefas[j] = temp;
+        }
+        }
+    }
+
+    // Atribui prioridades conforme RM
+    for (int i = 0; i < NUM_TASKS; i++) {
+        tarefas[i].prioridade = tskIDLE_PRIORITY + (NUM_TASKS - i);
+        Serial.printf("Prioridade atribuída: %s -> %u\n", tarefas[i].name, (unsigned)tarefas[i].prioridade);
+    }
 }
 
 void setScheduler(String mode) {
@@ -156,6 +180,7 @@ void tarefaPeriodica(void* pvParameters){
 
     if (strcmp(t->name, "Display") == 0) display(t);
     else if (strcmp(t->name, "CalcLoad") == 0) calcLoad(t);
+    else if (strcmp(t->name, "Random") == 0) random(t);
     else for(;;) vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
@@ -165,6 +190,8 @@ void taskAperiodica(void* pvParameters){
     for(;;){
         if(xSemaphoreTake(semAperiodica, portMAX_DELAY) == pdTRUE){
             uint64_t inicio = esp_timer_get_time();
+
+            servo.write(90);
 
             Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
 
@@ -179,9 +206,11 @@ void taskAperiodica(void* pvParameters){
 
             if(exec_us > (t->periodo_ms * 1000ULL)){
                 t->misses++;
+
                 digitalWrite(BUZZER, HIGH);
                 busyWait(300);
                 digitalWrite(BUZZER, LOW);
+
                 Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
             }
 
@@ -203,7 +232,7 @@ void display(TarefaPeriodica* t){
         vTaskDelayUntil(&ultimoTick, periodoTicks);
 
         uint64_t inicio = esp_timer_get_time();
-    
+
         // --- jitter em ticks: diferença entre wake real e expectedTick ---
         TickType_t actualTick = xTaskGetTickCount();
         int32_t jitterTicks = (int32_t)(actualTick - expectedTick);
@@ -255,8 +284,12 @@ void display(TarefaPeriodica* t){
         t->ativacoes++;
         t->carga_us = exec_us;
 
+
         if(exec_us > (t->periodo_ms * 1000)){
             t->misses++;
+            
+            servo.write(0);
+
             Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
         }
         if(t->handle) t->current_prio = uxTaskPriorityGet(t->handle);
@@ -271,7 +304,7 @@ void calcLoad(TarefaPeriodica* t){
     for(;;){
         TickType_t expectedTick = ultimoTick + periodoTicks;
         vTaskDelayUntil(&ultimoTick, periodoTicks);
-
+        
         uint64_t inicio = esp_timer_get_time();
 
         // --- jitter em ticks: diferença entre wake real e expectedTick ---
@@ -308,7 +341,49 @@ void calcLoad(TarefaPeriodica* t){
 
         if(exec_us > (t->periodo_ms * 1000ULL)){
             t->misses++;
+
+            servo.write(0);
+
             Serial.printf("[MISS] %s excedeu o período (%llu us)\n", t->name, (unsigned long long)exec_us);
+        }
+        if(t->handle) t->current_prio = uxTaskPriorityGet(t->handle);
+    }
+}
+
+void random(TarefaPeriodica* t){
+    TickType_t ultimoTick = xTaskGetTickCount();
+    // Ajustado para usar o periodo da própria tarefa para evitar confusão, mas mantive a lógica original se for intencional
+    TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms); 
+
+    for(;;){
+        TickType_t expectedTick = ultimoTick + periodoTicks;
+        vTaskDelayUntil(&ultimoTick, periodoTicks);
+        
+        uint64_t inicio = esp_timer_get_time();
+
+        // --- jitter em ticks: diferença entre wake real e expectedTick ---
+        TickType_t actualTick = xTaskGetTickCount();
+        int32_t jitterTicks = (int32_t)(actualTick - expectedTick);
+        uint32_t jitterMs = (uint32_t)( ( (int32_t)jitterTicks ) * portTICK_PERIOD_MS );
+        t->jitter_ms = jitterMs;
+
+        checkEDF(t, inicio);
+
+        busyWait(random(0, t->periodo_ms) * 1000);
+
+        uint64_t fim = esp_timer_get_time();
+        uint64_t exec_us = fim - inicio;
+
+        t->carga_us = exec_us;
+        t->total_exec_us += exec_us;
+        t->ativacoes++;
+
+        if(exec_us > (t->periodo_ms * 1000ULL)){
+            t->misses++;
+
+            servo.write(0);
+
+            Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
         }
         if(t->handle) t->current_prio = uxTaskPriorityGet(t->handle);
     }
@@ -628,6 +703,10 @@ void setup() {
     pinMode(BOTAO, INPUT_PULLDOWN);
     pinMode(statusLedPin, OUTPUT);
     pinMode(BUZZER, OUTPUT);
+    pinMode(SERVO, OUTPUT);
+
+    servo.attach(SERVO);
+    servo.write(0); // Posição inicial do servo
 
     // Fim configuração dos pinos
     
@@ -675,6 +754,8 @@ void setup() {
     lcd.createChar(3, barra_4_linhas);
 
     Serial.println("LCD Paralelo inicializado.");
+
+    atribuirPrioridadesRM();
 
     for(int i = 0; i < NUM_TASKS; i++) xTaskCreate(tarefaPeriodica, tarefas[i].name, 2048, &tarefas[i], tarefas[i].prioridade, &tarefas[i].handle);
 

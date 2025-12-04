@@ -18,7 +18,7 @@
 
 // Pins
 const int BOTAO = 15;
-const int statusLedPin = 2; // LED de status do ESP32
+const int statusLedPin = 2;
 const int BUZZER = 22;
 const int SERVO = 32;
 
@@ -105,11 +105,11 @@ void atribuirPrioridadesRM() {
     // Ordena as tarefas pelo período
     for (int i = 0; i < NUM_TASKS - 1; i++) {
         for (int j = i + 1; j < NUM_TASKS; j++) {
-        if (tarefas[j].periodo_ms < tarefas[i].periodo_ms) {
-            TarefaPeriodica temp = tarefas[i];
-            tarefas[i] = tarefas[j];
-            tarefas[j] = temp;
-        }
+            if (tarefas[j].periodo_ms < tarefas[i].periodo_ms) {
+                TarefaPeriodica temp = tarefas[i];
+                tarefas[i] = tarefas[j];
+                tarefas[j] = temp;
+            }
         }
     }
 
@@ -126,7 +126,6 @@ void setScheduler(String mode) {
         strncpy((char*)currentScheduler, mode.c_str(), 3);
         xSemaphoreGive(mtxSheduler);
 
-        digitalWrite(statusLedPin, (mode == "RM") ? HIGH : LOW);
         Serial.printf("MODO ALTERADO PARA: %s\n", mode.c_str());
     }
 }
@@ -329,6 +328,7 @@ void calcLoad(TarefaPeriodica* t){
 
         xSemaphoreTake(mtxLoad, portMAX_DELAY);
         cpuLoad = (int)(totalUtilization * 100.0f);
+        (cpuLoad > 80) ? digitalWrite(statusLedPin, HIGH) : digitalWrite(statusLedPin, LOW);
         if(cpuLoad > 100) cpuLoad = 100;
         xSemaphoreGive(mtxLoad);
 
@@ -687,12 +687,6 @@ void handleGetEnabled() {server.send(200, "text/plain", ledEnabled ? "true" : "f
 
 void handleGetStatus() {server.send(200, "text/plain", IsStarted ? "true" : "false");}
 
-void handleToggle() {
-    ledEnabled = !ledEnabled;
-    digitalWrite(statusLedPin, ledEnabled ? HIGH : LOW);
-    server.send(200, "text/plain", "OK");
-}
-
 // rota metrics
 void handleMetricsWrapper() { handleMetrics(); }
 
@@ -739,7 +733,6 @@ void setup() {
     server.on("/", handleRoot);
     server.on("/setScheduler", handleSetScheduler); 
     server.on("/getScheduler", handleGetScheduler); 
-    server.on("/toggle", handleToggle);
     server.on("/getEnabled", handleGetEnabled);
     server.on("/getStatus", handleGetStatus); 
     server.on("/metrics", handleMetricsWrapper); // rota para gráficos

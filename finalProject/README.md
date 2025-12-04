@@ -214,10 +214,6 @@ http://<IP do seu esp32>
 
 👉 [Acesse no GitHub](https://github.com/2005HAK/STR.git) 
 <p align="center">
-
-**Autores:** Gabriella Arévalo Marques e Hebert Alan Kubis  
-**Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  
-**Data:** Novembro de 2025  
 </p>
 
 <p align="center">

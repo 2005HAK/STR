@@ -2,16 +2,13 @@
   Projeto: Escalonamento RM ↔ EDF no ESP32
   Autor: Gabriella Arévalo e Hebert Alan Kubis
   Matéria: Sistemas de Tempo Real 2025.2
-  
-  Correção aplicada: Alteração para modo Station (WIFI_STA) para permitir
-  que o navegador baixe a biblioteca Chart.js da internet.
 */
 
 #include <WiFi.h>
 #include <WebServer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/semphr.h> // Correção: caminho do include (case sensitive em alguns sistemas)
+#include <freertos/semphr.h>
 #include <LiquidCrystal.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
@@ -38,7 +35,6 @@ byte barra_4_linhas[] = {B11110, B11110, B11110, B11110, B11110, B11110, B11110,
 // End LCD variables
 
 // WiFi variables
-// ATENÇÃO: Coloque aqui o Wi-Fi da sua casa/laboratório para ter internet
 const char* ssid = "Hak"; 
 const char* password = "maverick";
 WebServer server(80);
@@ -190,11 +186,11 @@ void taskAperiodica(void* pvParameters){
         if(xSemaphoreTake(semAperiodica, portMAX_DELAY) == pdTRUE){
             uint64_t inicio = esp_timer_get_time();
 
-            servo.write(90);
+            servo.write(0);
 
             Serial.printf("[APERIODICA] Iniciou em %lluus\n", (unsigned long long)inicio);
 
-            busyWait(8500); // Simula carga de ~8ms
+            busyWait(8900); // Simula carga de ~8.9ms
 
             uint64_t fim = esp_timer_get_time();
             uint64_t exec_us = fim - inicio;
@@ -207,7 +203,7 @@ void taskAperiodica(void* pvParameters){
                 t->misses++;
 
                 digitalWrite(BUZZER, HIGH);
-                busyWait(300);
+                busyWait(1000);
                 digitalWrite(BUZZER, LOW);
 
                 Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
@@ -287,7 +283,7 @@ void display(TarefaPeriodica* t){
         if(exec_us > (t->periodo_ms * 1000)){
             t->misses++;
             
-            servo.write(0);
+            servo.write(90);
 
             Serial.printf("[MISS] %s excedeu o período (%lluus > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
         }
@@ -297,7 +293,6 @@ void display(TarefaPeriodica* t){
 
 void calcLoad(TarefaPeriodica* t){
     TickType_t ultimoTick = xTaskGetTickCount();
-    // Ajustado para usar o periodo da própria tarefa para evitar confusão, mas mantive a lógica original se for intencional
     TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms); 
 
     for(;;){
@@ -342,7 +337,7 @@ void calcLoad(TarefaPeriodica* t){
         if(exec_us > (t->periodo_ms * 1000ULL)){
             t->misses++;
 
-            servo.write(0);
+            servo.write(90);
 
             Serial.printf("[MISS] %s excedeu o período (%llu us)\n", t->name, (unsigned long long)exec_us);
         }
@@ -352,7 +347,6 @@ void calcLoad(TarefaPeriodica* t){
 
 void random(TarefaPeriodica* t){
     TickType_t ultimoTick = xTaskGetTickCount();
-    // Ajustado para usar o periodo da própria tarefa para evitar confusão, mas mantive a lógica original se for intencional
     TickType_t periodoTicks = pdMS_TO_TICKS(t->periodo_ms); 
 
     for(;;){
@@ -369,7 +363,7 @@ void random(TarefaPeriodica* t){
 
         checkEDF(t, inicio);
 
-        busyWait(random(0, t->periodo_ms) * 1000);
+        busyWait(random(0, t->periodo_ms + 100) * 1000);
 
         uint64_t fim = esp_timer_get_time();
         uint64_t exec_us = fim - inicio;
@@ -381,7 +375,7 @@ void random(TarefaPeriodica* t){
         if(exec_us > (t->periodo_ms * 1000ULL)){
             t->misses++;
 
-            servo.write(0);
+            servo.write(90);
 
             Serial.printf("[MISS] %s excedeu o período (%llu us > %u ms)\n", t->name, (unsigned long long)exec_us, t->periodo_ms);
         }
@@ -398,7 +392,6 @@ void IRAM_ATTR isrBotao() {
 // -------------------- ROTA /metrics --------------------
 // Retorna JSON com arrays de métricas para uso pelo Chart.js
 void handleMetrics() {
-    // Aumentado um pouco o buffer por segurança (512 -> 768)
     StaticJsonDocument<768> doc;
     JsonArray tasks = doc.createNestedArray("tasks");
 
@@ -701,14 +694,10 @@ void setup() {
 
     servo.attach(SERVO);
     servo.write(0); // Posição inicial do servo
+    delay(1000);
 
     // Fim configuração dos pinos
-    
-    // ------------------------------------------------------------------------
-    // CONFIGURAÇÃO WIFI (MODO STATION)
-    // Motivo: Para que a biblioteca Chart.js possa ser baixada da internet,
-    // o ESP32 e o computador precisam estar numa rede COM internet.
-    // ------------------------------------------------------------------------
+
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 

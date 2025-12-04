@@ -137,8 +137,8 @@ A página HTML é enviada com `server.send()` e contém:
 ### RM — Prioridade fixa (menor período = maior prioridade)
 
 **Linha do tempo →**\
-T1 (CalcLoad): `|■■|     |■■|    |■■|     |■■|` \
-T2 (Display): `    |■■■■|            |■■■■|`\
+T1 (CalcLoad): `|■■|     |■■|        |■■|    |■■|` \
+T2 (Display): `    |■■■■|               |■■■■|`\
 T3 (Random): `              |■■■■■■■■|`
 
 

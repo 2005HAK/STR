@@ -128,7 +128,7 @@ A página HTML é enviada com `server.send()` e contém:
 | **LCD - D7** | GPIO 27 | Dados LCD |
 
 
-## 🧮 Diagrama de Escalonamento
+## 🧮 Diagrama de Escalonamento - Exemplo
 
 * Cada tarefa recebe `next_deadline = now + periodo`
 * Tarefas são ordenadas por deadline
@@ -137,16 +137,16 @@ A página HTML é enviada com `server.send()` e contém:
 ### RM — Prioridade fixa (menor período = maior prioridade)
 
 **Linha do tempo →**\
-T1 (CalcLoad): `|■■|     |■■|    |■■|    |■■|` \
-T2 (Display): `    |■■■■|      |■■■■|`\
-T3 (Random): `         |■■■■■■■■|`
+T1 (CalcLoad): `|■■|     |■■|    |■■|     |■■|` \
+T2 (Display): `    |■■■■|            |■■■■|`\
+T3 (Random): `              |■■■■■■■■|`
 
 
 ### EDF — Prioridade dinâmica (menor deadline primeiro)
 
 **Linha do tempo →**\
-T1 (CalcLoad): `|■■| |■■| |■■| |■■|`\
-T2 (Display): `     |■■■■|     |■■■■|`\
+T1 (CalcLoad): `|■■|     |■■|  |■■|    |■■|`\
+T2 (Display): `     |■■■■|        |■■■■|`\
 T3 (Random):            `|■■■■|`
 
 

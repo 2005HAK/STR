@@ -36,7 +36,7 @@ byte barra_4_linhas[] = {B11110, B11110, B11110, B11110, B11110, B11110, B11110,
 
 // WiFi variables
 const char* ssid = "Hak"; 
-const char* password = "maverick";
+const char* password = "*******";
 WebServer server(80);
 
 //End WiFi variables

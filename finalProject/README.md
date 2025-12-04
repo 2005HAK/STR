@@ -207,17 +207,13 @@ http://<IP do seu esp32>
   - **Gabriella Arévalo Marques**  
     📧 [gabriellaarevalomarques@gmail.com](mailto:gabriellaarevalomarques@gmail.com)
 
-  - **Hebert Allan Kubis**  
+  - **Hebert Alan Kubis**  
     📧 [herbertkubis15@gmail.com](mailto:herbertkubis15@gmail.com)
 
 ## 🔗 Repositório
 
 👉 [Acesse no GitHub](https://github.com/2005HAK/STR.git) 
 <p align="center">
-
-**Autores:** Gabriella Arévalo Marques e Hebert Alan Kubis  
-**Curso:** EMB5633 – Sistemas de Tempo Real (UFSC)  
-**Data:** Novembro de 2025  
 </p>
 
 <p align="center">

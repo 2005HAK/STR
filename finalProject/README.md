@@ -207,7 +207,7 @@ http://<IP do seu esp32>
   - **Gabriella Arévalo Marques**  
     📧 [gabriellaarevalomarques@gmail.com](mailto:gabriellaarevalomarques@gmail.com)
 
-  - **Hebert Allan Kubis**  
+  - **Hebert Alan Kubis**  
     📧 [herbertkubis15@gmail.com](mailto:herbertkubis15@gmail.com)
 
 ## 🔗 Repositório

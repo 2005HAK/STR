@@ -112,6 +112,13 @@ A página HTML é enviada com `server.send()` e contém:
                  │Web Dashboard │
                  └──────────────┘
 ```
+
+## 🖼️ Diagrama de conexões
+
+<p align="center">
+  <img src="finalproject.png" alt="Dashboard do Projeto" width="600"/>
+</p>
+
 ## 🔌 Pinos Utilizados
 
 | Componente | Pino ESP32 (GPIO) | Função |

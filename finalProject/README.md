@@ -145,9 +145,9 @@ T3 (Random): `              |■■■■■■■■|`
 ### EDF — Prioridade dinâmica (menor deadline primeiro)
 
 **Linha do tempo →**\
-T1 (CalcLoad): `|■■|     |■■|  |■■|    |■■|`\
-T2 (Display): `     |■■■■|        |■■■■|`\
-T3 (Random):            `|■■■■|`
+T1 (CalcLoad): `|■■|     |■■|    |■■|    |■■|`\
+T2 (Display): `     |■■■■|          |■■■■|`\
+T3 (Random):               `|■■■■|`
 
 
 ## 📝 Comparativo de Escalonamento em Tempo Real: RM vs. EDF (ESP32)

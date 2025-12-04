@@ -18,15 +18,13 @@ Este projeto implementa, em um ESP32, um sistema de escalonamento comutável ent
 * **Tarefas Simuladas:**
     * *CalcLoad:* Tarefa de cálculo de carga.
     * *Display:* Atualização de LCD físico.
+    * *Random:* Tarefa com carga de processamento aleatória.
     * *Aperiódica:* Tarefa pesada disparada por botão para teste de estresse.
 * **Feedback Físico:** 
-    * Exibe métricas em LCD 16×2
-    * Coleta e envia dados em formato JSON
-    * Possui interface web com gráficos em Chart.js
-    * Monitora uso de CPU, jitter, tempos de execução, misses e prioridades
-    * Inclui tarefa aperiódica acionada por botão
-    * Inclui cálculo dinâmico de carga da CPU
-    * Opera em modo Wi-Fi Station (WIFI_STA) para usar Chart.js online
+  * **LCD 16×2:** Exibe métricas de uso de CPU e modo atual.
+  * **Servo Motor:** Atua como indicador visual de carga (movimenta-se durante tarefas aperiódicas ou falhas).
+  * **Buzzer:** Alarme sonoro para *Deadline Misses*.
+  * **LED:** Indicador de status de carga alta.
 
 ## 🧩 Funcionalidades do Sistema
 
@@ -34,20 +32,21 @@ Este projeto implementa, em um ESP32, um sistema de escalonamento comutável ent
 
 * Interruptor por software através da interface web
 * Atualização visual no LCD (“RM → EDF” e vice-versa)
-* Prioridades reconfiguradas em tempo real
+* O algoritmo EDF utiliza uma ordenação (*Bubble Sort*) dos ponteiros das tarefas para redefinir prioridades dinamicamente a cada ciclo.
 
 ### ✔️ 2. Tarefas Periódicas
 
-| Tarefa   | Período | Função                      |
-| -------- | ------- | --------------------------- |
-| CalcLoad | 300 ms  | Calcula carga total da CPU  |
-| Display  | 500 ms  | Atualiza LCD com CPU e modo |
-
+| Tarefa   | Período | Prioridade (RM) | Função                     |
+| -------- | ------- | --------------- |----------------------------|
+| CalcLoad | 300 ms  | Alta            | Calcula carga total da CPU |
+| Display  | 500 ms  | Média           | Atualiza LCD com CPU e modo|
+| Random   | 700 ms  | Baixa           | Simula processamento variável (Wait aleatório) |
 ### ✔️ 3. Tarefa Aperiódica
 
-* Acionada por interrupção do botão (GPIO 15)
-* Executa carga simulada (busy wait 8,5 ms)
-* Reporta deadline misses com buzzer
+* Acionada por interrupção do botão (GPIO 15).
+* Executa carga simulada (busy wait ~8,5 ms).
+* Aciona o **Servo Motor** para 90° durante a execução.
+* Reporta deadline misses com buzzer e reseta o servo para 0°.
 
 ### ✔️ 4. Interface Web Moderna (Chart.js)
 
@@ -105,7 +104,7 @@ A página HTML é enviada com `server.send()` e contém:
        ┌────────────────▼───────────────────┐
        │        Execução das Tarefas        │
        │ - Mede tempo real                  │
-       │ - Registra atraso e deadline miss  │
+       │ - Aciona Servo/Buzzer se necessário│
        │ - Envia dados para interface web   │
        └────────────────┬───────────────────┘
                         │
@@ -119,7 +118,8 @@ A página HTML é enviada com `server.send()` e contém:
 | :--- | :--- | :--- |
 | **Botão** | GPIO 15 | Dispara tarefa aperiódica (Interrupção) |
 | **Buzzer** | GPIO 22 | Alerta de Deadline Miss |
-| **LED Status** | GPIO 2 | Indica modo de operação (RM = Ligado) |
+| **Server Motor** | GPIO 32 |Indicador físico (0° = Idle/Miss, 90° = Ativo)|
+| **LED Status** | GPIO 2 | Indica sobrecarga de CPU (>80%)|
 | **LCD - RS** | GPIO 5 | Controle do LCD |
 | **LCD - EN** | GPIO 4 | Controle do LCD |
 | **LCD - D4** | GPIO 18 | Dados LCD |
@@ -128,7 +128,7 @@ A página HTML é enviada com `server.send()` e contém:
 | **LCD - D7** | GPIO 27 | Dados LCD |
 
 
-## 🧮 Diagrama de Escalonamento
+## 🧮 Diagrama de Escalonamento - Exemplo
 
 * Cada tarefa recebe `next_deadline = now + periodo`
 * Tarefas são ordenadas por deadline
@@ -137,17 +137,17 @@ A página HTML é enviada com `server.send()` e contém:
 ### RM — Prioridade fixa (menor período = maior prioridade)
 
 **Linha do tempo →**\
-T1: `|■■|     |■■|    |■■|    |■■|` \
-T2: `    |■■■■|      |■■■■|`\
-T3: `         |■■■■■■■■|`
+T1 (CalcLoad): `|■■|      |■■|        |■■|     |■■|` \
+T2 (Display): `      |■■■■|               |■■■■|`\
+T3 (Random): `              |■■■■■■■■|`
 
 
 ### EDF — Prioridade dinâmica (menor deadline primeiro)
 
 **Linha do tempo →**\
-T1: `|■■| |■■| |■■| |■■|`\
-T3: `    |■■■■|     |■■■■|`\
-T2: `         |■■■■|`
+T1 (CalcLoad): `|■■|       |■■|    |■■|     |■■|`\
+T2 (Display): `       |■■■■|           |■■■■|`\
+T3 (Random):               `|■■■■|`
 
 
 ## 📝 Comparativo de Escalonamento em Tempo Real: RM vs. EDF (ESP32)
@@ -159,7 +159,7 @@ O sistema permite a alternância dinâmica entre os modos de escalonamento e ofe
 
 ## 📊 Métricas Calculadas
 
-* `exec_us` → tempo de execução real da tarefa
+* `exec_us` → tempo de execução real da tarefa com `esp_timer_get_time`
 * `misses` → contagem de deadline misses
 * `jitter_ms` → jitter medido usando `vTaskDelayUntil`
 * `prio` → prioridade real no FreeRTOS

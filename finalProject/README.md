@@ -116,7 +116,7 @@ A página HTML é enviada com `server.send()` e contém:
 ## 🖼️ Diagrama de conexões
 
 <p align="center">
-  <img src="https://github.com/2005HAK/STR/blob/master/finalProject/finalProject.png" alt="Esquema eletrico de conexões" width="600"/>
+  <img src="https://github.com/2005HAK/STR/blob/master/finalProject/finalProject.png" alt="Esquema eletrico de conexões" width="900"/>
 </p>
 
 ## 🔌 Pinos Utilizados
